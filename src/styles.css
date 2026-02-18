@@ -1,0 +1,185 @@
+:root {
+  font-family: 'DM Sans', 'Segoe UI', sans-serif;
+  color: #14213d;
+  background: radial-gradient(circle at top left, #fff6e7 0%, #f4f7fb 45%, #e6eef8 100%);
+  line-height: 1.4;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.app-shell {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+  display: grid;
+  gap: 16px;
+}
+
+.panel {
+  background: #ffffff;
+  border: 1px solid #dce5f2;
+  border-radius: 16px;
+  box-shadow: 0 6px 30px rgba(20, 33, 61, 0.08);
+  padding: 16px;
+}
+
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nav button {
+  border: 1px solid #bfd1eb;
+  background: #edf3fb;
+  border-radius: 999px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.nav button.active {
+  background: #fca311;
+  border-color: #fca311;
+  color: #111;
+  font-weight: 700;
+}
+
+.grid {
+  display: grid;
+  gap: 12px;
+}
+
+.grid-2 {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.92rem;
+}
+
+input,
+select,
+textarea {
+  border: 1px solid #c8d6ec;
+  border-radius: 8px;
+  padding: 7px 10px;
+  background: #fff;
+}
+
+button.primary {
+  background: #fca311;
+  color: #111;
+  border: 1px solid #fca311;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+button.subtle {
+  background: #f3f7fe;
+  border: 1px solid #c7d9f5;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+button.danger {
+  background: #ffe9ea;
+  border: 1px solid #ffc2c6;
+  border-radius: 8px;
+  color: #9e1f28;
+  cursor: pointer;
+  padding: 8px 10px;
+}
+
+.table-wrap {
+  overflow: auto;
+  border: 1px solid #dce5f2;
+  border-radius: 12px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 900px;
+}
+
+th,
+td {
+  border-bottom: 1px solid #edf1f8;
+  padding: 8px;
+  font-size: 0.9rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  background: #f8fbff;
+  font-weight: 700;
+}
+
+small.muted {
+  color: #62708a;
+}
+
+.shift-cell {
+  display: grid;
+  gap: 6px;
+  min-width: 175px;
+}
+
+.shift-cell .times {
+  display: flex;
+  gap: 4px;
+}
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: #edf3fb;
+  color: #31425f;
+}
+
+.highlight {
+  background: #fff4dd;
+}
+
+@media (max-width: 768px) {
+  .app-shell {
+    padding: 12px;
+  }
+}
