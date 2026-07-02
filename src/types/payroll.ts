@@ -22,7 +22,6 @@ export interface Employee {
   documentId?: string;
   baseMonthlySalary: number;
   active: boolean;
-  baseTemplateId?: string;
 }
 
 export interface PayPeriod {

@@ -28,6 +28,9 @@ interface AggregateInput {
   adjustments: Record<string, number>;
 }
 
+/** Identificador de plantilla para turno partido (dos bloques con break en medio) */
+export const TEMPLATE_PARTIDO = 'partido';
+
 const ZERO_TOTALS: HourTotals = {
   ORD: 0,
   RN: 0,
@@ -170,8 +173,9 @@ export const splitShiftIntoSegments = (
   const totalMinutes = end - start;
 
   // Para turno partido: dividir en dos bloques separados por el break
-  if (shift.templateId === 'partido' && shift.breakMinutes > 0) {
+  if (shift.templateId === TEMPLATE_PARTIDO && shift.breakMinutes > 0) {
     const workMinutes = totalMinutes - shift.breakMinutes;
+    if (workMinutes <= 0) return [];
     const halfWork = Math.floor(workMinutes / 2);
     const firstEnd = start + halfWork;
     const secondStart = firstEnd + shift.breakMinutes;
