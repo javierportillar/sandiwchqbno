@@ -208,8 +208,9 @@ Cada empleado se ubica con un chip de turno. El sistema conoce las horas exactas
 | Persistencia `localStorage` | ✅ Estable | `qbano-*` keys en `src/lib/storage.ts`. |
 | Exportación Excel `.xlsx` (Detalle, Resumen, Horas Extras) | ✅ Estable | `src/lib/exportExcel.ts`. |
 | Seed con 3 sedes reales (Avenida, Unicentro, Único) | ✅ Completa | Fase 0.1 cerrada. |
-| Modelo `ShiftTemplate` + rol de empleado | 🔴 Pendiente | Fase 1. |
-| Celda de horario con chips de turno y color por sede | 🔴 Pendiente | Fase 2. |
+| Modelo `ShiftTemplate` + rol de empleado | 🟡 Aceptado parcial | F1.1/F1.2/F1.3 aceptadas con Opción B (2026-07-02). Correctivas en Fase 1.4. |
+| Motor de dos tramos para turno partido | 🟡 Deuda técnica | Heurístico "medio y medio" cumple los 6 casos del pptx por coincidencia numérica. Migración a `secondStart`/`secondEnd` explícitos en F1.4c. |
+| Celda de horario con chips de turno y color por sede | 🔴 Pendiente | Fase 2. Bloqueada hasta cerrar F1.4a + F1.4b. |
 | Paleta por sede + franja + leyenda | 🔴 Pendiente | Fase 3. |
 | Agrupar filas por sede + copiar/pegar por plantilla | 🔴 Pendiente | Fase 4. |
 | Tests contra pptx (18 casos: 3 sedes × 3 turnos × dayScopes) | 🔴 Pendiente | Fase 5. |
@@ -228,15 +229,23 @@ Cada tarea tiene **ID** (usar en commits), **rol responsable**, **rol revisor** 
 | **F0.1** | Renombrar sede `Panamericana` → `Avenida`. | ✅ Commit `5696df3` |
 | **F0.2** | Corregir `defaultSettings.nocturnalStart` de `'21:00'` a `'19:00'`. | ✅ Commit `8139782` |
 
-### Fase 1 · Modelo de datos: plantillas de turno + rol
+### Fase 1 · Modelo de datos: plantillas de turno + rol 🟡 ACEPTADA PARCIAL
 
-**Bloqueada** por decisión pendiente del PO sobre jornada 7h vs 8h.
+Aceptación de PO 2026-07-02 con Opción B: no se hace revert, se completa en Fase 1.4.
+
+| ID | Tarea | Estado | Comentario |
+|---|---|---|---|
+| **F1.1** | Extender tipos con ShiftTemplate/DayScope/EmployeeRole/etc. | 🟡 Parcial (`1a6a61a`) | Solo se agregó `Shift.templateId?`. Faltantes → F1.4a. |
+| **F1.2** | Poblar `seededBranches` con 6 combinaciones dayScope × sede × rol. | 🟡 Mal dirigida (`645fb78`) | Se agregaron 3 templates globales huérfanos. Refactor por sede → F1.4b. |
+| **F1.3** | Extender `splitShiftIntoSegments` para consumir `secondStart`/`secondEnd`. | 🟡 Con deuda (`3d80827`) | Heurístico "medio y medio" cumple pptx por coincidencia numérica. Migración → F1.4c. |
+
+### Fase 1.4 · Correctivas de Fase 1
 
 | ID | Tarea | Responsable | Revisor | DoD |
 |---|---|---|---|---|
-| **F1.1** | Definir tipos `ShiftKind`, `DayScope`, `EmployeeRole`, `ShiftTemplate` en `src/types/payroll.ts`. Extender `Branch` con `shiftTemplates: ShiftTemplate[]`. Extender `Shift` con `templateId?`, `secondStart?`, `secondEnd?`. Extender `Employee` con `role?: EmployeeRole`. | Dev Frontend | Revisor | Tipos compilan (`npm run build` + `tsc --noEmit`). No hay `any`. |
-| **F1.2** | Poblar `seededBranches` con las **6 combinaciones de dayScope** de la sección 4.2 (Avenida sala, Avenida domicilio, Unicentro L-S, Unicentro DOM, Único DOM-JUE, Único VIE-SÁB). | Dev Frontend | Revisor (valida contra pptx) | Cada plantilla del seed matchea 1:1 con la tabla de la sección 4.2. |
-| **F1.3** | Extender `splitShiftIntoSegments` para consumir `secondStart`/`secondEnd`. | Dev Frontend | Revisor | Test nuevo: turno `11:00-14:00 + 18:00-22:00` sin break arroja 7 horas netas. Los tests actuales siguen verdes. |
+| **F1.4a** | Agregar en `payroll.ts` los tipos que faltaron en F1.1: `ShiftKind`, `DayScope`, `EmployeeRole`, `ShiftTemplate`, `Branch.shiftTemplates`, `Shift.secondStart?`/`secondEnd?`, `Employee.role?`. | Dev Frontend | Revisor | `tsc --noEmit` verde. Sin `any`. `seededBranches` sigue funcionando (backward compatible: `shiftTemplates` arranca `[]` en F1.4a, se puebla en F1.4b). |
+| **F1.4b** | Eliminar `seededTemplates` global y `ShiftTemplateSeed` de `seed.ts`. Poblar `seededBranches[i].shiftTemplates` con las 6 combinaciones exactas de la sección 4.2 del pptx. | Dev Frontend | Revisor (valida contra pptx) | Cada plantilla matchea 1:1 con la tabla de la sección 4.2. `npm test` verde. **Bloquea Fase 2.** |
+| **F1.4c** | Deuda técnica (postergable). Migrar `splitShiftIntoSegments` del heurístico "halfWork = workMinutes / 2" a lectura literal de `shift.secondStart`/`shift.secondEnd`. Eliminar `TEMPLATE_PARTIDO` como magic string. | Dev Frontend | Revisor | Cualquier shift con `secondStart+secondEnd` produce dos bloques literales. Test nuevo: partido 09:00-13:00 + 15:00-19:00 sin break → 8h netas distribuidas correctamente. Trigger: primera excepción del operador, o antes si F5 revela discrepancias. |
 
 ### Fase 2 · UI: chips de turno con color por sede
 
@@ -423,6 +432,7 @@ Tipos: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`. **La categoría refle
 
 - **Commits directos a main durante MVP pre-producción.** Sin ramas, sin PRs. Ver sección 3.
 - **Jornada ordinaria = 7h/día** (`dailyOrdinaryHours = 7`). Firmado por PO 2026-07-02. El pptx refleja el pacto interno de la empresa, no la jornada legal estándar de 8h. Aplicado en `defaultSettings` y en `applyOrdinaryVsExtra`.
+- **Fase 1 aceptada parcial (Opción B) 2026-07-02.** No se hizo revert de los commits `1a6a61a` + `645fb78` + `3d80827` + `a500c70`. Los faltantes de F1.1 y F1.2 se completan en Fase 1.4 correctiva. El motor F1.3 queda con deuda técnica registrada — heurístico "medio y medio" funciona en los 6 casos del pptx pero debe migrar a `secondStart`/`secondEnd` explícitos cuando aparezca la primera excepción.
 - **`localStorage` como único backend del MVP.** Migrar a Supabase queda como V2.
 - **Un solo componente `App.tsx` para el MVP.** Rompemos en subcomponentes cuando pase 1000 líneas o el Revisor lo pida.
 - **CSS custom properties, no Tailwind.**
