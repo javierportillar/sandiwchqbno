@@ -28,10 +28,11 @@ function dayScopeMatches(dayScope: DayScope, dayOfWeek: number): boolean {
  * - Devuelve undefined si no hay ninguna plantilla que cumpla todos los filtros.
  */
 export function resolveTemplateForDate(
-  branch: Branch,
+  branch: Branch | undefined,
   dateISO: string,
   options?: { role?: EmployeeRole; kind?: ShiftKind }
 ): ShiftTemplate | undefined {
+  if (!branch) return undefined;
   const date = new Date(`${dateISO}T12:00:00Z`);
   const dayOfWeek = date.getUTCDay();
 
@@ -48,10 +49,11 @@ export function resolveTemplateForDate(
  * Útil para poblar los chips disponibles en la celda de horario.
  */
 export function listTemplatesForDate(
-  branch: Branch,
+  branch: Branch | undefined,
   dateISO: string,
   role?: EmployeeRole
 ): ShiftTemplate[] {
+  if (!branch) return [];
   const date = new Date(`${dateISO}T12:00:00Z`);
   const dayOfWeek = date.getUTCDay();
 

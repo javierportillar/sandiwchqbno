@@ -716,6 +716,7 @@ function App() {
                       const isCustomizing = customizingCells[cellKey] ?? false;
 
                       if (isCustomizing) {
+                        const isSplit = shift?.secondStart || shift?.secondEnd;
                         return (
                           <td key={`${employee.id}-${date}`}>
                             <div className="shift-cell customize-mode">
@@ -741,6 +742,32 @@ function App() {
                                   }
                                 />
                               </div>
+                              {isSplit && (
+                                <div className="times">
+                                  <input
+                                    type="time"
+                                    value={shift?.secondStart ?? ''}
+                                    placeholder="2do inicio"
+                                    onChange={(event) =>
+                                      upsertShift(employee.id, date, {
+                                        secondStart: event.target.value || undefined,
+                                        restDay: false
+                                      })
+                                    }
+                                  />
+                                  <input
+                                    type="time"
+                                    value={shift?.secondEnd ?? ''}
+                                    placeholder="2do fin"
+                                    onChange={(event) =>
+                                      upsertShift(employee.id, date, {
+                                        secondEnd: event.target.value || undefined,
+                                        restDay: false
+                                      })
+                                    }
+                                  />
+                                </div>
+                              )}
                               <input
                                 type="number"
                                 min={0}
@@ -795,7 +822,7 @@ function App() {
                           upsertShift(employee.id, date, { restDay: true, templateId: undefined });
                           return;
                         }
-                        const template = resolveTemplateForDate(branch!, date, {
+                        const template = resolveTemplateForDate(branch, date, {
                           role: employee.role,
                           kind
                         });
