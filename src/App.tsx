@@ -99,9 +99,7 @@ const buildShiftKey = (employeeId: string, periodId: string, date: string) =>
 
 function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
-  const [branches, setBranches] = useState<Branch[]>(() =>
-    loadState(KEY.branches, seededBranches)
-  );
+  const [branches] = useState<Branch[]>(() => loadState(KEY.branches, seededBranches));
   const [employees, setEmployees] = useState<Employee[]>(() =>
     loadState(KEY.employees, seededEmployees)
   );
