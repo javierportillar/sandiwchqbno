@@ -1,4 +1,4 @@
-export type BranchName = 'Unicentro' | 'Único' | 'Panamericana';
+export type BranchName = 'Unicentro' | 'Único' | 'Avenida';
 
 export interface Company {
   id: string;

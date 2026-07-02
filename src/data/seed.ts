@@ -30,9 +30,9 @@ export const seededBranches: Branch[] = [
     timezone: 'America/Bogota'
   },
   {
-    id: 'branch-panamericana',
+    id: 'branch-avenida',
     companyId: seededCompany.id,
-    name: 'Panamericana',
+    name: 'Avenida',
     defaultStartTime: '10:00',
     defaultEndTime: '19:00',
     timezone: 'America/Bogota'
@@ -79,7 +79,7 @@ export const seededEmployees: Employee[] = [
   {
     id: 'emp-3',
     companyId: seededCompany.id,
-    branchId: 'branch-panamericana',
+    branchId: 'branch-avenida',
     fullName: 'Valentina Pérez',
     documentId: '30303030',
     baseMonthlySalary: 1700000,
