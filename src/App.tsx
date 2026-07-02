@@ -192,6 +192,14 @@ function App() {
     setCalculationResult(result);
   };
 
+  const findNormalTemplate = (branch: Branch, employee: Employee) => {
+    return branch.shiftTemplates.find(
+      (t) =>
+        t.kind === 'normal' &&
+        (!t.role || t.role === employee.role)
+    );
+  };
+
   const upsertShift = (employeeId: string, date: string, patch: Partial<Shift>) => {
     if (!selectedPeriod) {
       return;
@@ -227,15 +235,16 @@ function App() {
       if (!branch) {
         continue;
       }
+      const normalTemplate = findNormalTemplate(branch, employee);
       for (const date of periodDates) {
         const key = buildShiftKey(employee.id, selectedPeriod.id, date);
         if (shiftsByKey.has(key)) {
           continue;
         }
         upsertShift(employee.id, date, {
-          startTime: branch.defaultStartTime,
-          endTime: branch.defaultEndTime,
-          breakMinutes: 60,
+          startTime: normalTemplate?.startTime ?? branch.defaultStartTime,
+          endTime: normalTemplate?.endTime ?? branch.defaultEndTime,
+          breakMinutes: normalTemplate?.breakMinutes ?? 60,
           restDay: false
         });
       }
@@ -312,7 +321,10 @@ function App() {
       startTime: sourceShift.startTime,
       endTime: sourceShift.endTime,
       breakMinutes: sourceShift.breakMinutes,
-      restDay: sourceShift.restDay
+      restDay: sourceShift.restDay,
+      templateId: sourceShift.templateId,
+      secondStart: sourceShift.secondStart,
+      secondEnd: sourceShift.secondEnd
     };
 
     for (const date of copyTargetDates) {

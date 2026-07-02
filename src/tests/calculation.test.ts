@@ -94,6 +94,30 @@ describe('motor de cálculo de nómina', () => {
     expect(totals.HEN).toBe(0);
   });
 
+  it('classifySegments emite RN_DOM para domingo nocturno', () => {
+    const shift: Shift = {
+      id: 's12',
+      employeeId: 'emp-1',
+      payPeriodId: 'period-1',
+      date: '2026-01-04',
+      startTime: '19:00',
+      endTime: '22:00',
+      breakMinutes: 0
+    };
+
+    // 2026-01-04 es domingo
+    const date = new Date('2026-01-04T12:00:00Z');
+    expect(date.getUTCDay()).toBe(0);
+
+    const segments = splitShiftIntoSegments(shift, defaultSettings);
+    const classified = classifySegments(segments);
+    const totals = applyOrdinaryVsExtra(classified, defaultSettings);
+
+    // 19:00-22:00 = 3h nocturnas en domingo → RN_DOM ordinarias
+    expect(totals.RN_DOM).toBe(3);
+    expect(totals.DOM18).toBe(0);
+  });
+
   it('turno partido legacy sin secondStart/secondEnd usa heurístico', () => {
     const shift: Shift = {
       id: 's11',

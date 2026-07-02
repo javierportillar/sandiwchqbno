@@ -269,7 +269,8 @@ export const seededEmployees: Employee[] = [
     fullName: 'Valentina Pérez',
     documentId: '30303030',
     baseMonthlySalary: 1700000,
-    active: true
+    active: true,
+    role: 'sala'
   }
 ];
 

@@ -208,10 +208,12 @@ export const splitShiftIntoSegments = (
 };
 
 export const classifySegments = (segments: WorkSegment[]): ClassifiedSegment[] => {
+  // Dominical nocturno → RN_DOM (recargo nocturno 35% + dominical 80% = 1.15).
+  // DOM18 queda como columna de referencia para cálculo alternativo (factor 1.8 total).
   return segments.map((segment) => {
     const ordinaryBucket: keyof HourTotals = segment.isSunday
       ? segment.isNight
-        ? 'DOM18'
+        ? 'RN_DOM'
         : 'DOM08'
       : segment.isNight
         ? 'RN'

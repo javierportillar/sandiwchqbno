@@ -208,8 +208,9 @@ Cada empleado se ubica con un chip de turno. El sistema conoce las horas exactas
 | Persistencia `localStorage` | ✅ Estable | `qbano-*` keys en `src/lib/storage.ts`. |
 | Exportación Excel `.xlsx` (Detalle, Resumen, Horas Extras) | ✅ Estable | `src/lib/exportExcel.ts`. |
 | Seed con 3 sedes reales (Avenida, Unicentro, Único) | ✅ Completa | Fase 0.1 cerrada. |
-| Modelo `ShiftTemplate` + rol de empleado | 🟡 Aceptado parcial | F1.1/F1.2/F1.3 aceptadas con Opción B (2026-07-02). Correctivas en Fase 1.4. |
-| Motor de dos tramos para turno partido | 🟡 Deuda técnica | Heurístico "medio y medio" cumple los 6 casos del pptx por coincidencia numérica. Migración a `secondStart`/`secondEnd` explícitos en F1.4c. |
+| Modelo `ShiftTemplate` + rol de empleado | ✅ Completa | F1.4a (`9a8679a`) + F1.4b (`85fc267`→`2274644`). 18 plantillas por sede/rol/dayScope. |
+| Motor de dos tramos para turno partido | ✅ Completa | `secondStart`/`secondEnd` explícitos como ruta primaria (`3e7a7ff`). Heurístico legacy como fallback. |
+| Clasificación `RN_DOM` para domingo nocturno | ✅ Resuelta | `classifySegments` emite `RN_DOM` en vez de `DOM18` para segmentos dominicales nocturnos. |
 | Celda de horario con chips de turno y color por sede | 🔴 Pendiente | Fase 2. Bloqueada hasta cerrar F1.4a + F1.4b. |
 | Paleta por sede + franja + leyenda | 🔴 Pendiente | Fase 3. |
 | Agrupar filas por sede + copiar/pegar por plantilla | 🔴 Pendiente | Fase 4. |
@@ -239,13 +240,16 @@ Aceptación de PO 2026-07-02 con Opción B: no se hace revert, se completa en Fa
 | **F1.2** | Poblar `seededBranches` con 6 combinaciones dayScope × sede × rol. | 🟡 Mal dirigida (`645fb78`) | Se agregaron 3 templates globales huérfanos. Refactor por sede → F1.4b. |
 | **F1.3** | Extender `splitShiftIntoSegments` para consumir `secondStart`/`secondEnd`. | 🟡 Con deuda (`3d80827`) | Heurístico "medio y medio" cumple pptx por coincidencia numérica. Migración → F1.4c. |
 
-### Fase 1.4 · Correctivas de Fase 1
+### Fase 1.4 · Correctivas de Fase 1 ✅ COMPLETADA
 
-| ID | Tarea | Responsable | Revisor | DoD |
-|---|---|---|---|---|
-| **F1.4a** | Agregar en `payroll.ts` los tipos que faltaron en F1.1: `ShiftKind`, `DayScope`, `EmployeeRole`, `ShiftTemplate`, `Branch.shiftTemplates`, `Shift.secondStart?`/`secondEnd?`, `Employee.role?`. | Dev Frontend | Revisor | `tsc --noEmit` verde. Sin `any`. `seededBranches` sigue funcionando (backward compatible: `shiftTemplates` arranca `[]` en F1.4a, se puebla en F1.4b). |
-| **F1.4b** | Eliminar `seededTemplates` global y `ShiftTemplateSeed` de `seed.ts`. Poblar `seededBranches[i].shiftTemplates` con las 6 combinaciones exactas de la sección 4.2 del pptx. | Dev Frontend | Revisor (valida contra pptx) | Cada plantilla matchea 1:1 con la tabla de la sección 4.2. `npm test` verde. **Bloquea Fase 2.** |
-| **F1.4c** | Deuda técnica (postergable). Migrar `splitShiftIntoSegments` del heurístico "halfWork = workMinutes / 2" a lectura literal de `shift.secondStart`/`shift.secondEnd`. Eliminar `TEMPLATE_PARTIDO` como magic string. | Dev Frontend | Revisor | Cualquier shift con `secondStart+secondEnd` produce dos bloques literales. Test nuevo: partido 09:00-13:00 + 15:00-19:00 sin break → 8h netas distribuidas correctamente. Trigger: primera excepción del operador, o antes si F5 revela discrepancias. |
+| ID | Tarea | Commit | DoD |
+|---|---|---|---|
+| **F1.4a** | Agregar en `payroll.ts` los tipos que faltaron en F1.1: `ShiftKind`, `DayScope`, `EmployeeRole`, `ShiftTemplate`, `Branch.shiftTemplates`, `Shift.secondStart?`/`secondEnd?`, `Employee.role?`. | `9a8679a` | ✅ 6 tipos nuevos, sin `any`, `tsc` verde |
+| **F1.4b** | Eliminar `seededTemplates` global y `ShiftTemplateSeed` de `seed.ts`. Poblar `seededBranches[i].shiftTemplates` con las 6 combinaciones exactas de la sección 4.2 del pptx. | `85fc267` → `2274644` (retry) | ✅ 18 plantillas (6 partido + 6 normal + 6 doblado). 1:1 con pptx. |
+| **F1.4c** | Migrar `splitShiftIntoSegments` del heurístico a lectura literal de `shift.secondStart`/`shift.secondEnd`. | `3e7a7ff` | ✅ Ruta explícita primero, heurístico como fallback legacy. Test dual (explícito + legacy). |
+| **F1.4d** | Fixes post-auditoría: preload con templates, copy/paste metadata, RN_DOM, audit deps, higiene. | Pendiente | ✅ `fillDefaultsForPeriod` usa shiftTemplates. `applyCopyToTargets` preserva `templateId`/`secondStart`/`secondEnd`. `classifySegments` emite `RN_DOM`. `npm audit fix`. `.gitignore` actualizado. |
+
+### Fase 2 · UI: chips de turno con color por sede
 
 ### Fase 2 · UI: chips de turno con color por sede
 
@@ -432,7 +436,8 @@ Tipos: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`. **La categoría refle
 
 - **Commits directos a main durante MVP pre-producción.** Sin ramas, sin PRs. Ver sección 3.
 - **Jornada ordinaria = 7h/día** (`dailyOrdinaryHours = 7`). Firmado por PO 2026-07-02. El pptx refleja el pacto interno de la empresa, no la jornada legal estándar de 8h. Aplicado en `defaultSettings` y en `applyOrdinaryVsExtra`.
-- **Fase 1 aceptada parcial (Opción B) 2026-07-02.** No se hizo revert de los commits `1a6a61a` + `645fb78` + `3d80827` + `a500c70`. Los faltantes de F1.1 y F1.2 se completan en Fase 1.4 correctiva. El motor F1.3 queda con deuda técnica registrada — heurístico "medio y medio" funciona en los 6 casos del pptx pero debe migrar a `secondStart`/`secondEnd` explícitos cuando aparezca la primera excepción.
+- **Fase 1 aceptada parcial (Opción B) 2026-07-02.** No se hizo revert de los commits `1a6a61a` + `645fb78` + `3d80827` + `a500c70`. Los faltantes de F1.1 y F1.2 se completaron en Fase 1.4 correctiva (`9a8679a` + `85fc267`→`2274644` + `3e7a7ff`). El motor F1.3 se migró a `secondStart`/`secondEnd` explícitos, el heurístico legacy queda como fallback.
+- **F1.4d (2026-07-02) — Fixes post-auditoría.** `fillDefaultsForPeriod` usa `shiftTemplates` en vez de `defaultStartTime`/`defaultEndTime`. Copy/paste preserva `templateId`, `secondStart`, `secondEnd`. `classifySegments` emite `RN_DOM` para domingo nocturno. Resuelto `npm audit` safe. Limpieza `.gitignore`.
 - **`localStorage` como único backend del MVP.** Migrar a Supabase queda como V2.
 - **Un solo componente `App.tsx` para el MVP.** Rompemos en subcomponentes cuando pase 1000 líneas o el Revisor lo pida.
 - **CSS custom properties, no Tailwind.**
