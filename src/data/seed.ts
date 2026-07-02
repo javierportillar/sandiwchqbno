@@ -42,7 +42,7 @@ export const seededBranches: Branch[] = [
 export const defaultSettings: PayrollSettings = {
   nocturnalStart: '19:00',
   nocturnalEnd: '06:00',
-  dailyOrdinaryHours: 8,
+  dailyOrdinaryHours: 7,
   weeklyOrdinaryHours: 46,
   monthlyHoursBase: 220,
   multipliers: {

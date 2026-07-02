@@ -60,9 +60,11 @@ describe('motor de cálculo de nómina', () => {
       defaultSettings
     );
 
-    expect(totals.ORD).toBe(8);
+    // Jornada ordinaria 7h/día (pptx). 08:00-19:00 = 11h diurnas → 7 ORD + 4 HED.
+    // 19:00-20:00 = 1h nocturna, ya sin cupo ordinario → 1 HEN.
+    expect(totals.ORD).toBe(7);
     expect(totals.RN).toBe(0);
-    expect(totals.HED).toBe(3);
+    expect(totals.HED).toBe(4);
     expect(totals.HEN).toBe(1);
   });
 

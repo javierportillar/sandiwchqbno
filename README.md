@@ -139,7 +139,7 @@ Estas reglas están en `INVERSIONES CAICEDO BASTIDAS SAS COMPONENTES DE NOMINA.p
 
 > **Nota sobre "tarifas totales" vs "recargos".** El pptx habla en tarifas totales (`HED = 1,25` → 100% de la hora ordinaria + 25% de recargo). El código maneja únicamente el **recargo** (`0,25`), y suma la hora ordinaria por separado en `ORD`. Matemáticamente equivalente. Cualquier cambio de convención debe pasar por el Revisor.
 
-> **Hallazgo pendiente de PO (2026-07-02).** Cruzando desgloses del pptx contra `dailyOrdinaryHours = 8`: Avenida sala DOBLADO 11-22 = 11h netas. Pptx dice `7 ORD + 1 HED + 3 HEN`. Con jornada 8h el motor daría `8 ORD + 3 HEN`. Con jornada 7h cuadra exacto. **La jornada ordinaria efectiva del pptx parece ser 7h/día**, no 8h. Decisión pendiente del PO antes de arrancar Fase 1.2.
+> **Jornada ordinaria = 7h/día — firmado por PO 2026-07-02.** `defaultSettings.dailyOrdinaryHours = 7`. Alinea con los desgloses del pptx: Avenida sala DOBLADO 11-22 = 7 ORD + 1 HED + 3 HEN, Único DOM-JUE DOBLADO 11-21 = 7 ORD + 1 HED + 2 HEN, y análogos. La ley colombiana estándar es 8h/día; el pptx refleja el pacto interno de la empresa. El motor asigna las primeras 7h netas del día a `ORD` (o `RN` si caen después de las 19:00) y el excedente a extras.
 
 ### 4.2 · Turnos plantilla por sede
 
@@ -213,7 +213,6 @@ Cada empleado se ubica con un chip de turno. El sistema conoce las horas exactas
 | Paleta por sede + franja + leyenda | 🔴 Pendiente | Fase 3. |
 | Agrupar filas por sede + copiar/pegar por plantilla | 🔴 Pendiente | Fase 4. |
 | Tests contra pptx (18 casos: 3 sedes × 3 turnos × dayScopes) | 🔴 Pendiente | Fase 5. |
-| Decisión sobre jornada ordinaria 7h vs 8h | 🟡 Pendiente PO | Bloqueante para Fase 1.2. |
 | Regla "3+ domingos → compensatorio" | ⏳ Roadmap V2 | Fuera de MVP por decisión de PO. |
 
 ---
@@ -423,6 +422,7 @@ Tipos: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`. **La categoría refle
 ### Decisiones cerradas
 
 - **Commits directos a main durante MVP pre-producción.** Sin ramas, sin PRs. Ver sección 3.
+- **Jornada ordinaria = 7h/día** (`dailyOrdinaryHours = 7`). Firmado por PO 2026-07-02. El pptx refleja el pacto interno de la empresa, no la jornada legal estándar de 8h. Aplicado en `defaultSettings` y en `applyOrdinaryVsExtra`.
 - **`localStorage` como único backend del MVP.** Migrar a Supabase queda como V2.
 - **Un solo componente `App.tsx` para el MVP.** Rompemos en subcomponentes cuando pase 1000 líneas o el Revisor lo pida.
 - **CSS custom properties, no Tailwind.**
@@ -430,7 +430,6 @@ Tipos: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`. **La categoría refle
 
 ### Decisiones abiertas (esperan PO)
 
-- **Jornada ordinaria 7h vs 8h.** Bloqueante para Fase 1.2.
 - Paleta exacta de colores por sede y turno (borrador propuesto en F3.1).
 - Si el operador puede editar directamente el catálogo de `shiftTemplates` desde la UI.
 - Si el `.xlsx` de exportación necesita una hoja extra con desglose por sede.
