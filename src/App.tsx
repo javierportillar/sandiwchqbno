@@ -4,10 +4,12 @@ import {
   Branch,
   CalculationResult,
   Employee,
+  EmployeeRole,
   HourTotals,
   PayPeriod,
   PayrollSettings,
-  Shift
+  Shift,
+  ShiftKind
 } from './types/payroll';
 import {
   defaultSettings,
@@ -20,6 +22,7 @@ import {
 import { fixed2, loadState, pesos, saveState, uid } from './lib/storage';
 import { aggregateDailyAndPeriod } from './lib/calculation';
 import { exportPayrollExcel } from './lib/exportExcel';
+import { resolveTemplateForDate, listTemplatesForDate } from './lib/templates';
 
 const TABS: Array<{ id: AppTab; label: string }> = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -122,13 +125,16 @@ function App() {
     fullName: '',
     documentId: '',
     branchId: branches[0]?.id ?? '',
-    baseMonthlySalary: 1600000
+    baseMonthlySalary: 1600000,
+    role: '' as string
   });
 
   const [newPeriod, setNewPeriod] = useState({
     startDate: '',
     endDate: ''
   });
+
+  const [customizingCells, setCustomizingCells] = useState<Record<string, boolean>>({});
 
   const [copySource, setCopySource] = useState<{ employeeId: string; date: string }>({
     employeeId: '',
@@ -262,11 +268,12 @@ function App() {
       fullName: newEmployee.fullName.trim(),
       documentId: newEmployee.documentId.trim() || undefined,
       baseMonthlySalary: Number(newEmployee.baseMonthlySalary),
-      active: true
+      active: true,
+      role: (newEmployee.role as EmployeeRole) || undefined
     };
 
     setEmployees((prev) => [...prev, employee]);
-    setNewEmployee((prev) => ({ ...prev, fullName: '', documentId: '' }));
+    setNewEmployee((prev) => ({ ...prev, fullName: '', documentId: '', role: '' }));
   };
 
   const addPeriod = () => {
@@ -525,6 +532,21 @@ function App() {
                 }
               />
             </label>
+            {newEmployee.branchId === 'branch-avenida' && (
+              <label>
+                Rol
+                <select
+                  value={newEmployee.role}
+                  onChange={(event) =>
+                    setNewEmployee((prev) => ({ ...prev, role: event.target.value }))
+                  }
+                >
+                  <option value="">Seleccione...</option>
+                  <option value="sala">Sala</option>
+                  <option value="domicilio">Domicilio</option>
+                </select>
+              </label>
+            )}
           </div>
           <div className="row">
             <button className="primary" onClick={addEmployee}>
@@ -539,6 +561,7 @@ function App() {
                   <th>Nombre</th>
                   <th>Documento</th>
                   <th>Sede</th>
+                  <th>Rol</th>
                   <th>Básico</th>
                   <th>Estado</th>
                 </tr>
@@ -549,6 +572,28 @@ function App() {
                     <td>{employee.fullName}</td>
                     <td>{employee.documentId ?? '-'}</td>
                     <td>{branchesMap.get(employee.branchId)?.name}</td>
+                    <td>
+                      {branchesMap.get(employee.branchId)?.name === 'Avenida' ? (
+                        <select
+                          value={employee.role ?? ''}
+                          onChange={(event) =>
+                            setEmployees((prev) =>
+                              prev.map((item) =>
+                                item.id === employee.id
+                                  ? { ...item, role: (event.target.value as EmployeeRole) || undefined }
+                                  : item
+                              )
+                            )
+                          }
+                        >
+                          <option value="">Sin rol</option>
+                          <option value="sala">Sala</option>
+                          <option value="domicilio">Domicilio</option>
+                        </select>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
                     <td>{pesos(employee.baseMonthlySalary)}</td>
                     <td>
                       <button
@@ -666,58 +711,155 @@ function App() {
                       const shift =
                         selectedPeriod &&
                         shiftsByKey.get(buildShiftKey(employee.id, selectedPeriod.id, date));
+                      const branch = branchesMap.get(employee.branchId);
+                      const cellKey = `${employee.id}|${date}`;
+                      const isCustomizing = customizingCells[cellKey] ?? false;
+
+                      if (isCustomizing) {
+                        return (
+                          <td key={`${employee.id}-${date}`}>
+                            <div className="shift-cell customize-mode">
+                              <div className="times">
+                                <input
+                                  type="time"
+                                  value={shift?.startTime ?? ''}
+                                  onChange={(event) =>
+                                    upsertShift(employee.id, date, {
+                                      startTime: event.target.value || undefined,
+                                      restDay: false
+                                    })
+                                  }
+                                />
+                                <input
+                                  type="time"
+                                  value={shift?.endTime ?? ''}
+                                  onChange={(event) =>
+                                    upsertShift(employee.id, date, {
+                                      endTime: event.target.value || undefined,
+                                      restDay: false
+                                    })
+                                  }
+                                />
+                              </div>
+                              <input
+                                type="number"
+                                min={0}
+                                placeholder="Break min"
+                                value={shift?.breakMinutes ?? 60}
+                                onChange={(event) =>
+                                  upsertShift(employee.id, date, {
+                                    breakMinutes: Number(event.target.value),
+                                    restDay: false
+                                  })
+                                }
+                              />
+                              <label className="row">
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(shift?.restDay)}
+                                  onChange={(event) =>
+                                    upsertShift(employee.id, date, {
+                                      restDay: event.target.checked,
+                                      startTime: event.target.checked ? undefined : shift?.startTime,
+                                      endTime: event.target.checked ? undefined : shift?.endTime
+                                    })
+                                  }
+                                />
+                                Descanso
+                              </label>
+                              <button
+                                className="subtle"
+                                onClick={() =>
+                                  setCustomizingCells((prev) => ({ ...prev, [cellKey]: false }))
+                                }
+                              >
+                                Volver a chips
+                              </button>
+                            </div>
+                          </td>
+                        );
+                      }
+
+                      const activeKind = shift?.restDay
+                        ? 'descanso'
+                        : shift?.templateId && branch
+                          ? branch.shiftTemplates.find((t) => t.id === shift.templateId)?.kind
+                          : undefined;
+
+                      const availableTemplates = branch
+                        ? listTemplatesForDate(branch, date, employee.role)
+                        : [];
+
+                      const handleChip = (kind: ShiftKind) => {
+                        if (kind === 'descanso') {
+                          upsertShift(employee.id, date, { restDay: true, templateId: undefined });
+                          return;
+                        }
+                        const template = resolveTemplateForDate(branch!, date, {
+                          role: employee.role,
+                          kind
+                        });
+                        if (template) {
+                          upsertShift(employee.id, date, {
+                            templateId: template.id,
+                            startTime: template.startTime,
+                            endTime: template.endTime,
+                            secondStart: template.secondStart,
+                            secondEnd: template.secondEnd,
+                            breakMinutes: template.breakMinutes,
+                            restDay: false
+                          });
+                        }
+                      };
 
                       return (
                         <td key={`${employee.id}-${date}`}>
-                          <div className="shift-cell">
-                            <div className="times">
-                              <input
-                                type="time"
-                                value={shift?.startTime ?? ''}
-                                onChange={(event) =>
-                                  upsertShift(employee.id, date, {
-                                    startTime: event.target.value || undefined,
-                                    restDay: false
-                                  })
-                                }
-                              />
-                              <input
-                                type="time"
-                                value={shift?.endTime ?? ''}
-                                onChange={(event) =>
-                                  upsertShift(employee.id, date, {
-                                    endTime: event.target.value || undefined,
-                                    restDay: false
-                                  })
-                                }
-                              />
+                          <div className="shift-cell chips-mode">
+                            <div className="chips">
+                              {(['partido', 'normal', 'doblado'] as const).map((kind) => {
+                                const available = availableTemplates.some((t) => t.kind === kind);
+                                return (
+                                  <button
+                                    key={kind}
+                                    className={`chip ${activeKind === kind ? 'active' : ''} ${!available ? 'disabled' : ''}`}
+                                    disabled={!available}
+                                    onClick={() => handleChip(kind)}
+                                    title={
+                                      available
+                                        ? availableTemplates.find((t) => t.kind === kind)
+                                            ?.label ?? kind
+                                        : 'No disponible para este día'
+                                    }
+                                  >
+                                    {kind === 'partido'
+                                      ? 'Partido'
+                                      : kind === 'normal'
+                                        ? 'Normal'
+                                        : 'Doblado'}
+                                  </button>
+                                );
+                              })}
+                              <button
+                                className={`chip ${activeKind === 'descanso' ? 'active' : ''}`}
+                                onClick={() => handleChip('descanso')}
+                              >
+                                Descanso
+                              </button>
                             </div>
-                            <input
-                              type="number"
-                              min={0}
-                              placeholder="Break min"
-                              value={shift?.breakMinutes ?? 60}
-                              onChange={(event) =>
-                                upsertShift(employee.id, date, {
-                                  breakMinutes: Number(event.target.value),
-                                  restDay: false
-                                })
+                            <button
+                              className="subtle personalize-btn"
+                              onClick={() =>
+                                setCustomizingCells((prev) => ({ ...prev, [cellKey]: true }))
                               }
-                            />
-                            <label className="row">
-                              <input
-                                type="checkbox"
-                                checked={Boolean(shift?.restDay)}
-                                onChange={(event) =>
-                                  upsertShift(employee.id, date, {
-                                    restDay: event.target.checked,
-                                    startTime: event.target.checked ? undefined : shift?.startTime,
-                                    endTime: event.target.checked ? undefined : shift?.endTime
-                                  })
-                                }
-                              />
-                              Descanso
-                            </label>
+                            >
+                              Personalizar
+                            </button>
+                            {shift && !shift.restDay && (
+                              <small className="muted">
+                                {shift.startTime ?? '-'} a {shift.endTime ?? '-'}
+                                {shift.secondStart ? ` + ${shift.secondStart}-${shift.secondEnd}` : ''}
+                              </small>
+                            )}
                           </div>
                         </td>
                       );
