@@ -22,6 +22,7 @@ export interface Employee {
   documentId?: string;
   baseMonthlySalary: number;
   active: boolean;
+  baseTemplateId?: string;
 }
 
 export interface PayPeriod {
@@ -43,6 +44,7 @@ export interface Shift {
   notes?: string;
   overrideBranchId?: string;
   restDay?: boolean;
+  templateId?: string;
 }
 
 export interface ComputedDayBreakdown {
