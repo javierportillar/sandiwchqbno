@@ -19,7 +19,8 @@ export const seededBranches: Branch[] = [
     name: 'Unicentro',
     defaultStartTime: '08:00',
     defaultEndTime: '17:00',
-    timezone: 'America/Bogota'
+    timezone: 'America/Bogota',
+    shiftTemplates: []
   },
   {
     id: 'branch-unico',
@@ -27,7 +28,8 @@ export const seededBranches: Branch[] = [
     name: 'Único',
     defaultStartTime: '09:00',
     defaultEndTime: '18:00',
-    timezone: 'America/Bogota'
+    timezone: 'America/Bogota',
+    shiftTemplates: []
   },
   {
     id: 'branch-avenida',
@@ -35,7 +37,8 @@ export const seededBranches: Branch[] = [
     name: 'Avenida',
     defaultStartTime: '10:00',
     defaultEndTime: '19:00',
-    timezone: 'America/Bogota'
+    timezone: 'America/Bogota',
+    shiftTemplates: []
   }
 ];
 

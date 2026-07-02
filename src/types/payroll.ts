@@ -1,5 +1,29 @@
 export type BranchName = 'Unicentro' | 'Único' | 'Avenida';
 
+export type ShiftKind = 'partido' | 'normal' | 'doblado' | 'descanso';
+
+export type DayScope =
+  | 'all'
+  | 'mon-sat'
+  | 'sun'
+  | 'sun-thu'
+  | 'fri-sat';
+
+export type EmployeeRole = 'sala' | 'domicilio';
+
+export interface ShiftTemplate {
+  id: string;
+  kind: ShiftKind;
+  label: string;
+  startTime: string;
+  endTime: string;
+  secondStart?: string;
+  secondEnd?: string;
+  breakMinutes: number;
+  dayScope: DayScope;
+  role?: EmployeeRole;
+}
+
 export interface Company {
   id: string;
   name: string;
@@ -12,6 +36,7 @@ export interface Branch {
   defaultStartTime: string;
   defaultEndTime: string;
   timezone: 'America/Bogota';
+  shiftTemplates: ShiftTemplate[];
 }
 
 export interface Employee {
@@ -22,6 +47,7 @@ export interface Employee {
   documentId?: string;
   baseMonthlySalary: number;
   active: boolean;
+  role?: EmployeeRole;
 }
 
 export interface PayPeriod {
@@ -44,6 +70,8 @@ export interface Shift {
   overrideBranchId?: string;
   restDay?: boolean;
   templateId?: string;
+  secondStart?: string;
+  secondEnd?: string;
 }
 
 export interface ComputedDayBreakdown {
