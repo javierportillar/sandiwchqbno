@@ -20,7 +20,48 @@ export const seededBranches: Branch[] = [
     defaultStartTime: '08:00',
     defaultEndTime: '17:00',
     timezone: 'America/Bogota',
-    shiftTemplates: []
+    shiftTemplates: [
+      {
+        id: 'unicentro-ls-normal',
+        kind: 'normal',
+        label: 'Normal L-S',
+        startTime: '08:00',
+        endTime: '17:00',
+        breakMinutes: 60,
+        dayScope: 'mon-sat'
+      },
+      {
+        id: 'unicentro-ls-partido',
+        kind: 'partido',
+        label: 'Partido L-S',
+        startTime: '11:00',
+        endTime: '14:00',
+        secondStart: '18:00',
+        secondEnd: '22:00',
+        breakMinutes: 0,
+        dayScope: 'mon-sat'
+      },
+      {
+        id: 'unicentro-dom-normal',
+        kind: 'normal',
+        label: 'Normal DOM',
+        startTime: '08:00',
+        endTime: '17:00',
+        breakMinutes: 60,
+        dayScope: 'sun'
+      },
+      {
+        id: 'unicentro-dom-partido',
+        kind: 'partido',
+        label: 'Partido DOM',
+        startTime: '10:00',
+        endTime: '14:00',
+        secondStart: '18:00',
+        secondEnd: '22:00',
+        breakMinutes: 0,
+        dayScope: 'sun'
+      }
+    ]
   },
   {
     id: 'branch-unico',
@@ -29,7 +70,48 @@ export const seededBranches: Branch[] = [
     defaultStartTime: '09:00',
     defaultEndTime: '18:00',
     timezone: 'America/Bogota',
-    shiftTemplates: []
+    shiftTemplates: [
+      {
+        id: 'unico-dj-normal',
+        kind: 'normal',
+        label: 'Normal DOM-JUE',
+        startTime: '09:00',
+        endTime: '18:00',
+        breakMinutes: 60,
+        dayScope: 'sun-thu'
+      },
+      {
+        id: 'unico-dj-partido',
+        kind: 'partido',
+        label: 'Partido DOM-JUE',
+        startTime: '11:00',
+        endTime: '14:00',
+        secondStart: '18:00',
+        secondEnd: '21:00',
+        breakMinutes: 0,
+        dayScope: 'sun-thu'
+      },
+      {
+        id: 'unico-vs-normal',
+        kind: 'normal',
+        label: 'Normal VIE-SÁB',
+        startTime: '09:00',
+        endTime: '18:00',
+        breakMinutes: 60,
+        dayScope: 'fri-sat'
+      },
+      {
+        id: 'unico-vs-partido',
+        kind: 'partido',
+        label: 'Partido VIE-SÁB',
+        startTime: '11:00',
+        endTime: '14:00',
+        secondStart: '18:00',
+        secondEnd: '21:30',
+        breakMinutes: 0,
+        dayScope: 'fri-sat'
+      }
+    ]
   },
   {
     id: 'branch-avenida',
@@ -38,7 +120,52 @@ export const seededBranches: Branch[] = [
     defaultStartTime: '10:00',
     defaultEndTime: '19:00',
     timezone: 'America/Bogota',
-    shiftTemplates: []
+    shiftTemplates: [
+      {
+        id: 'avenida-sala-normal',
+        kind: 'normal',
+        label: 'Normal Sala',
+        startTime: '08:00',
+        endTime: '17:00',
+        breakMinutes: 60,
+        dayScope: 'all',
+        role: 'sala'
+      },
+      {
+        id: 'avenida-sala-partido',
+        kind: 'partido',
+        label: 'Partido Sala',
+        startTime: '11:00',
+        endTime: '14:00',
+        secondStart: '18:00',
+        secondEnd: '22:00',
+        breakMinutes: 0,
+        dayScope: 'all',
+        role: 'sala'
+      },
+      {
+        id: 'avenida-domi-normal',
+        kind: 'normal',
+        label: 'Normal Domicilio',
+        startTime: '09:00',
+        endTime: '18:00',
+        breakMinutes: 60,
+        dayScope: 'all',
+        role: 'domicilio'
+      },
+      {
+        id: 'avenida-domi-partido',
+        kind: 'partido',
+        label: 'Partido Domicilio',
+        startTime: '12:00',
+        endTime: '15:00',
+        secondStart: '18:00',
+        secondEnd: '22:00',
+        breakMinutes: 0,
+        dayScope: 'all',
+        role: 'domicilio'
+      }
+    ]
   }
 ];
 
@@ -97,38 +224,6 @@ export const seededPayPeriods: PayPeriod[] = [
     startDate: '2026-01-01',
     endDate: '2026-01-15',
     label: '2026-01-01 a 2026-01-15'
-  }
-];
-
-export interface ShiftTemplateSeed {
-  id: string;
-  label: string;
-  startTime: string;
-  endTime: string;
-  breakMinutes: number;
-}
-
-export const seededTemplates: ShiftTemplateSeed[] = [
-  {
-    id: 'normal',
-    label: 'Normal',
-    startTime: '08:00',
-    endTime: '17:00',
-    breakMinutes: 60
-  },
-  {
-    id: 'partido',
-    label: 'Partido',
-    startTime: '11:00',
-    endTime: '22:00',
-    breakMinutes: 240
-  },
-  {
-    id: 'doblado',
-    label: 'Doblado',
-    startTime: '08:00',
-    endTime: '20:00',
-    breakMinutes: 60
   }
 ];
 
