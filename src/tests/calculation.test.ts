@@ -68,6 +68,29 @@ describe('motor de cálculo de nómina', () => {
     expect(totals.HEN).toBe(1);
   });
 
+  it('turno partido se divide en dos bloques reales con break en medio', () => {
+    const shift: Shift = {
+      id: 's10',
+      employeeId: 'emp-1',
+      payPeriodId: 'period-1',
+      date: '2026-01-05',
+      startTime: '11:00',
+      endTime: '22:00',
+      breakMinutes: 240,
+      templateId: 'partido'
+    };
+
+    const totals = applyOrdinaryVsExtra(
+      classifySegments(splitShiftIntoSegments(shift, defaultSettings)),
+      defaultSettings
+    );
+
+    expect(totals.ORD).toBe(4);
+    expect(totals.RN).toBe(3);
+    expect(totals.HED).toBe(0);
+    expect(totals.HEN).toBe(0);
+  });
+
   it('aggregateDailyAndPeriod acumula por empleado', () => {
     const shifts: Shift[] = [
       {

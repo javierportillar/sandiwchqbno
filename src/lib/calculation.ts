@@ -108,30 +108,21 @@ const applyBreakMinutes = (
   return remaining.filter((s) => s.minutes > 0);
 };
 
-export const splitShiftIntoSegments = (
-  shift: Shift,
+const splitShiftRangeIntoSegments = (
+  startAbs: number,
+  endAbs: number,
+  shiftDate: string,
   settings: PayrollSettings
 ): WorkSegment[] => {
-  if (shift.restDay || !shift.startTime || !shift.endTime) {
-    return [];
-  }
-
-  const start = timeToMinutes(shift.startTime);
-  let end = timeToMinutes(shift.endTime);
-  if (end <= start) {
-    end += 1440;
-  }
-
   const nocturnalStart = timeToMinutes(settings.nocturnalStart);
   const nocturnalEnd = timeToMinutes(settings.nocturnalEnd);
-
   const segments: WorkSegment[] = [];
   let current: WorkSegment | null = null;
 
-  for (let absMinute = start; absMinute < end; absMinute += 1) {
+  for (let absMinute = startAbs; absMinute < endAbs; absMinute += 1) {
     const dayOffset = Math.floor(absMinute / 1440);
     const minuteOfDay = ((absMinute % 1440) + 1440) % 1440;
-    const localDate = addDays(shift.date, dayOffset);
+    const localDate = addDays(shiftDate, dayOffset);
     const isSunday = isSundayDate(localDate);
     const isNight = isNightMinute(minuteOfDay, nocturnalStart, nocturnalEnd);
 
@@ -159,6 +150,39 @@ export const splitShiftIntoSegments = (
     segments.push(current);
   }
 
+  return segments;
+};
+
+export const splitShiftIntoSegments = (
+  shift: Shift,
+  settings: PayrollSettings
+): WorkSegment[] => {
+  if (shift.restDay || !shift.startTime || !shift.endTime) {
+    return [];
+  }
+
+  const start = timeToMinutes(shift.startTime);
+  let end = timeToMinutes(shift.endTime);
+  if (end <= start) {
+    end += 1440;
+  }
+
+  const totalMinutes = end - start;
+
+  // Para turno partido: dividir en dos bloques separados por el break
+  if (shift.templateId === 'partido' && shift.breakMinutes > 0) {
+    const workMinutes = totalMinutes - shift.breakMinutes;
+    const halfWork = Math.floor(workMinutes / 2);
+    const firstEnd = start + halfWork;
+    const secondStart = firstEnd + shift.breakMinutes;
+
+    const firstSegments = splitShiftRangeIntoSegments(start, firstEnd, shift.date, settings);
+    const secondSegments = splitShiftRangeIntoSegments(secondStart, end, shift.date, settings);
+
+    return [...firstSegments, ...secondSegments];
+  }
+
+  const segments = splitShiftRangeIntoSegments(start, end, shift.date, settings);
   return applyBreakMinutes(segments, shift.breakMinutes);
 };
 
