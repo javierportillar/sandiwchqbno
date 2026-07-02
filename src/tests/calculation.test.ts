@@ -40,8 +40,8 @@ describe('motor de cálculo de nómina', () => {
     const classified = classifySegments(splitShiftIntoSegments(shift, defaultSettings));
     const totals = applyOrdinaryVsExtra(classified, defaultSettings);
 
-    expect(totals.ORD).toBe(1);
-    expect(totals.RN).toBe(1);
+    expect(totals.ORD).toBe(0);
+    expect(totals.RN).toBe(2);
   });
 
   it('applyOrdinaryVsExtra mueve excedentes a HED/HEN según corresponda', () => {
@@ -61,7 +61,9 @@ describe('motor de cálculo de nómina', () => {
     );
 
     expect(totals.ORD).toBe(8);
-    expect(totals.HED).toBe(4);
+    expect(totals.RN).toBe(0);
+    expect(totals.HED).toBe(3);
+    expect(totals.HEN).toBe(1);
   });
 
   it('aggregateDailyAndPeriod acumula por empleado', () => {
