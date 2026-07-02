@@ -97,6 +97,38 @@ export const seededPayPeriods: PayPeriod[] = [
   }
 ];
 
+export interface ShiftTemplateSeed {
+  id: string;
+  label: string;
+  startTime: string;
+  endTime: string;
+  breakMinutes: number;
+}
+
+export const seededTemplates: ShiftTemplateSeed[] = [
+  {
+    id: 'normal',
+    label: 'Normal',
+    startTime: '08:00',
+    endTime: '17:00',
+    breakMinutes: 60
+  },
+  {
+    id: 'partido',
+    label: 'Partido',
+    startTime: '11:00',
+    endTime: '22:00',
+    breakMinutes: 240
+  },
+  {
+    id: 'doblado',
+    label: 'Doblado',
+    startTime: '08:00',
+    endTime: '20:00',
+    breakMinutes: 60
+  }
+];
+
 export const seededShifts: Shift[] = [
   {
     id: 's-1',
