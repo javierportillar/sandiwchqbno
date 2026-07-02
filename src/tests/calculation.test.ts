@@ -68,9 +68,35 @@ describe('motor de cálculo de nómina', () => {
     expect(totals.HEN).toBe(1);
   });
 
-  it('turno partido se divide en dos bloques reales con break en medio', () => {
+  it('turno partido con secondStart/secondEnd explícitos', () => {
     const shift: Shift = {
       id: 's10',
+      employeeId: 'emp-1',
+      payPeriodId: 'period-1',
+      date: '2026-01-05',
+      startTime: '11:00',
+      endTime: '14:00',
+      secondStart: '18:00',
+      secondEnd: '22:00',
+      breakMinutes: 0,
+      templateId: 'partido'
+    };
+
+    const totals = applyOrdinaryVsExtra(
+      classifySegments(splitShiftIntoSegments(shift, defaultSettings)),
+      defaultSettings
+    );
+
+    // bloque1: 11-14(3h diurno) → ORD; bloque2: 18-19(1h diurno) → ORD, 19-22(3h noct) → RN
+    expect(totals.ORD).toBe(4);
+    expect(totals.RN).toBe(3);
+    expect(totals.HED).toBe(0);
+    expect(totals.HEN).toBe(0);
+  });
+
+  it('turno partido legacy sin secondStart/secondEnd usa heurístico', () => {
+    const shift: Shift = {
+      id: 's11',
       employeeId: 'emp-1',
       payPeriodId: 'period-1',
       date: '2026-01-05',

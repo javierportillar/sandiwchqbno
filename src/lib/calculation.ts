@@ -165,6 +165,23 @@ export const splitShiftIntoSegments = (
   }
 
   const start = timeToMinutes(shift.startTime);
+
+  // Turno con dos tramos explícitos (secondStart/secondEnd definidos)
+  if (shift.secondStart && shift.secondEnd) {
+    const firstEnd = timeToMinutes(shift.endTime);
+    const secondStartAbs = timeToMinutes(shift.secondStart);
+    let secondEndAbs = timeToMinutes(shift.secondEnd);
+    if (secondEndAbs <= secondStartAbs) {
+      secondEndAbs += 1440;
+    }
+
+    const firstSegments = splitShiftRangeIntoSegments(start, firstEnd, shift.date, settings);
+    const secondSegments = splitShiftRangeIntoSegments(secondStartAbs, secondEndAbs, shift.date, settings);
+
+    return [...firstSegments, ...secondSegments];
+  }
+
+  // Fallback: turno sin tramos explícitos (único bloque)
   let end = timeToMinutes(shift.endTime);
   if (end <= start) {
     end += 1440;
@@ -172,16 +189,16 @@ export const splitShiftIntoSegments = (
 
   const totalMinutes = end - start;
 
-  // Para turno partido: dividir en dos bloques separados por el break
+  // Fallback legacy para partido sin secondStart/secondEnd (heuristico)
   if (shift.templateId === TEMPLATE_PARTIDO && shift.breakMinutes > 0) {
     const workMinutes = totalMinutes - shift.breakMinutes;
     if (workMinutes <= 0) return [];
     const halfWork = Math.floor(workMinutes / 2);
-    const firstEnd = start + halfWork;
-    const secondStart = firstEnd + shift.breakMinutes;
+    const internalFirstEnd = start + halfWork;
+    const secondStartAbs = internalFirstEnd + shift.breakMinutes;
 
-    const firstSegments = splitShiftRangeIntoSegments(start, firstEnd, shift.date, settings);
-    const secondSegments = splitShiftRangeIntoSegments(secondStart, end, shift.date, settings);
+    const firstSegments = splitShiftRangeIntoSegments(start, internalFirstEnd, shift.date, settings);
+    const secondSegments = splitShiftRangeIntoSegments(secondStartAbs, end, shift.date, settings);
 
     return [...firstSegments, ...secondSegments];
   }
