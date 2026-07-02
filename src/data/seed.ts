@@ -25,9 +25,9 @@ export const seededBranches: Branch[] = [
         id: 'unicentro-ls-normal',
         kind: 'normal',
         label: 'Normal L-S',
-        startTime: '08:00',
-        endTime: '17:00',
-        breakMinutes: 60,
+        startTime: '14:00',
+        endTime: '22:00',
+        breakMinutes: 0,
         dayScope: 'mon-sat'
       },
       {
@@ -42,12 +42,21 @@ export const seededBranches: Branch[] = [
         dayScope: 'mon-sat'
       },
       {
+        id: 'unicentro-ls-doblado',
+        kind: 'doblado',
+        label: 'Doblado L-S',
+        startTime: '11:00',
+        endTime: '22:00',
+        breakMinutes: 0,
+        dayScope: 'mon-sat'
+      },
+      {
         id: 'unicentro-dom-normal',
         kind: 'normal',
         label: 'Normal DOM',
-        startTime: '08:00',
-        endTime: '17:00',
-        breakMinutes: 60,
+        startTime: '14:00',
+        endTime: '22:00',
+        breakMinutes: 0,
         dayScope: 'sun'
       },
       {
@@ -58,6 +67,15 @@ export const seededBranches: Branch[] = [
         endTime: '14:00',
         secondStart: '18:00',
         secondEnd: '22:00',
+        breakMinutes: 0,
+        dayScope: 'sun'
+      },
+      {
+        id: 'unicentro-dom-doblado',
+        kind: 'doblado',
+        label: 'Doblado DOM',
+        startTime: '10:00',
+        endTime: '22:00',
         breakMinutes: 0,
         dayScope: 'sun'
       }
@@ -75,9 +93,9 @@ export const seededBranches: Branch[] = [
         id: 'unico-dj-normal',
         kind: 'normal',
         label: 'Normal DOM-JUE',
-        startTime: '09:00',
-        endTime: '18:00',
-        breakMinutes: 60,
+        startTime: '14:00',
+        endTime: '21:00',
+        breakMinutes: 0,
         dayScope: 'sun-thu'
       },
       {
@@ -92,12 +110,21 @@ export const seededBranches: Branch[] = [
         dayScope: 'sun-thu'
       },
       {
+        id: 'unico-dj-doblado',
+        kind: 'doblado',
+        label: 'Doblado DOM-JUE',
+        startTime: '11:00',
+        endTime: '21:00',
+        breakMinutes: 0,
+        dayScope: 'sun-thu'
+      },
+      {
         id: 'unico-vs-normal',
         kind: 'normal',
         label: 'Normal VIE-SÁB',
-        startTime: '09:00',
-        endTime: '18:00',
-        breakMinutes: 60,
+        startTime: '14:00',
+        endTime: '21:30',
+        breakMinutes: 0,
         dayScope: 'fri-sat'
       },
       {
@@ -108,6 +135,15 @@ export const seededBranches: Branch[] = [
         endTime: '14:00',
         secondStart: '18:00',
         secondEnd: '21:30',
+        breakMinutes: 0,
+        dayScope: 'fri-sat'
+      },
+      {
+        id: 'unico-vs-doblado',
+        kind: 'doblado',
+        label: 'Doblado VIE-SÁB',
+        startTime: '11:00',
+        endTime: '21:30',
         breakMinutes: 0,
         dayScope: 'fri-sat'
       }
@@ -125,9 +161,9 @@ export const seededBranches: Branch[] = [
         id: 'avenida-sala-normal',
         kind: 'normal',
         label: 'Normal Sala',
-        startTime: '08:00',
-        endTime: '17:00',
-        breakMinutes: 60,
+        startTime: '14:00',
+        endTime: '22:00',
+        breakMinutes: 0,
         dayScope: 'all',
         role: 'sala'
       },
@@ -144,12 +180,22 @@ export const seededBranches: Branch[] = [
         role: 'sala'
       },
       {
+        id: 'avenida-sala-doblado',
+        kind: 'doblado',
+        label: 'Doblado Sala',
+        startTime: '11:00',
+        endTime: '22:00',
+        breakMinutes: 0,
+        dayScope: 'all',
+        role: 'sala'
+      },
+      {
         id: 'avenida-domi-normal',
         kind: 'normal',
         label: 'Normal Domicilio',
-        startTime: '09:00',
-        endTime: '18:00',
-        breakMinutes: 60,
+        startTime: '15:00',
+        endTime: '22:00',
+        breakMinutes: 0,
         dayScope: 'all',
         role: 'domicilio'
       },
@@ -161,6 +207,16 @@ export const seededBranches: Branch[] = [
         endTime: '15:00',
         secondStart: '18:00',
         secondEnd: '22:00',
+        breakMinutes: 0,
+        dayScope: 'all',
+        role: 'domicilio'
+      },
+      {
+        id: 'avenida-domi-doblado',
+        kind: 'doblado',
+        label: 'Doblado Domicilio',
+        startTime: '12:00',
+        endTime: '22:00',
         breakMinutes: 0,
         dayScope: 'all',
         role: 'domicilio'
