@@ -100,6 +100,13 @@ const buildPeriodLabel = (startDate: string, endDate: string) => `${startDate} a
 const buildShiftKey = (employeeId: string, periodId: string, date: string) =>
   `${employeeId}|${periodId}|${date}`;
 
+const branchClassSuffix = (branchId: string): 'avenida' | 'unicentro' | 'unico' | 'unknown' => {
+  if (branchId === 'branch-avenida') return 'avenida';
+  if (branchId === 'branch-unicentro') return 'unicentro';
+  if (branchId === 'branch-unico') return 'unico';
+  return 'unknown';
+};
+
 function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
   const [branches] = useState<Branch[]>(() => loadState(KEY.branches, seededBranches));
@@ -620,6 +627,22 @@ function App() {
       {activeTab === 'horarios' && (
         <section className="panel grid">
           <h2>3. Horarios</h2>
+          <div className="legend">
+            <div className="legend-group">
+              <span className="legend-label">Sedes</span>
+              <span className="branch-badge branch-badge-avenida">Avenida</span>
+              <span className="branch-badge branch-badge-unicentro">Unicentro</span>
+              <span className="branch-badge branch-badge-unico">Único</span>
+            </div>
+            <div className="legend-group">
+              <span className="legend-label">Turnos</span>
+              <span className="chip chip-partido chip-active">Partido</span>
+              <span className="chip chip-normal chip-active">Normal</span>
+              <span className="chip chip-doblado chip-active">Doblado</span>
+              <span className="chip chip-descanso chip-active">Descanso</span>
+            </div>
+          </div>
+
           <div className="row">
             <button className="primary" onClick={fillDefaultsForPeriod}>
               Precargar defaults por sede en celdas vacías
@@ -702,9 +725,17 @@ function App() {
                     <td>
                       <div className="grid">
                         <strong>{employee.fullName}</strong>
-                        <small className="muted">
-                          {branchesMap.get(employee.branchId)?.name} | básico {pesos(employee.baseMonthlySalary)}
-                        </small>
+                        <div className="row" style={{ gap: 6 }}>
+                          <span className={`branch-badge branch-badge-${branchClassSuffix(employee.branchId)}`}>
+                            {branchesMap.get(employee.branchId)?.name}
+                          </span>
+                          {employee.role && (
+                            <small className="muted">
+                              {employee.role === 'sala' ? 'Sala' : 'Domicilio'}
+                            </small>
+                          )}
+                          <small className="muted">básico {pesos(employee.baseMonthlySalary)}</small>
+                        </div>
                       </div>
                     </td>
                     {periodDates.map((date) => {
@@ -841,14 +872,14 @@ function App() {
 
                       return (
                         <td key={`${employee.id}-${date}`}>
-                          <div className="shift-cell chips-mode">
+                          <div className={`shift-cell chips-mode branch-cell-${branchClassSuffix(employee.branchId)}`}>
                             <div className="chips">
                               {(['partido', 'normal', 'doblado'] as const).map((kind) => {
                                 const available = availableTemplates.some((t) => t.kind === kind);
                                 return (
                                   <button
                                     key={kind}
-                                    className={`chip ${activeKind === kind ? 'active' : ''} ${!available ? 'disabled' : ''}`}
+                                    className={`chip chip-${kind} ${activeKind === kind ? 'chip-active' : ''} ${!available ? 'disabled' : ''}`}
                                     disabled={!available}
                                     onClick={() => handleChip(kind)}
                                     title={
@@ -867,7 +898,7 @@ function App() {
                                 );
                               })}
                               <button
-                                className={`chip ${activeKind === 'descanso' ? 'active' : ''}`}
+                                className={`chip chip-descanso ${activeKind === 'descanso' ? 'chip-active' : ''}`}
                                 onClick={() => handleChip('descanso')}
                               >
                                 Descanso

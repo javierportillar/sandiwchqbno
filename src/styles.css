@@ -260,6 +260,31 @@ small.muted {
   background: var(--branch-unico);
 }
 
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 12px;
+  background: var(--surface-1, #f8fbff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+
+.legend-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.legend-label {
+  font-size: 12px;
+  color: var(--text-secondary, #62708a);
+  font-weight: 500;
+  margin-right: 4px;
+}
+
 .badge {
   padding: 2px 8px;
   border-radius: 999px;
