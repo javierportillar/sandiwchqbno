@@ -2,6 +2,33 @@
   font-family: 'DM Sans', 'Segoe UI', sans-serif;
   color: #14213d;
   background: radial-gradient(circle at top left, #fff6e7 0%, #f4f7fb 45%, #e6eef8 100%);
+
+  /* Sedes — borde izquierdo 6px de la celda de horario + badge en primera columna */
+  --branch-avenida: #DC2626;
+  --branch-unicentro: #1E40AF;
+  --branch-unico: #15803D;
+
+  /* Turnos — fondo suave + borde saturado + texto oscuro del chip activo */
+  --turn-partido: #D97706;
+  --turn-partido-bg: #FEF3C7;
+  --turn-partido-border: #D97706;
+  --turn-partido-text: #92400E;
+
+  --turn-normal: #0891B2;
+  --turn-normal-bg: #CFFAFE;
+  --turn-normal-border: #0891B2;
+  --turn-normal-text: #0E7490;
+
+  --turn-doblado: #7C3AED;
+  --turn-doblado-bg: #EDE9FE;
+  --turn-doblado-border: #7C3AED;
+  --turn-doblado-text: #5B21B6;
+
+  --turn-descanso: #6B7280;
+  --turn-descanso-bg: #F3F4F6;
+  --turn-descanso-border: #6B7280;
+  --turn-descanso-text: #374151;
+
   line-height: 1.4;
 }
 
@@ -163,6 +190,74 @@ small.muted {
 .shift-cell .times {
   display: flex;
   gap: 4px;
+}
+
+.shift-cell.branch-cell-avenida {
+  border-left: 6px solid var(--branch-avenida);
+}
+
+.shift-cell.branch-cell-unicentro {
+  border-left: 6px solid var(--branch-unicentro);
+}
+
+.shift-cell.branch-cell-unico {
+  border-left: 6px solid var(--branch-unico);
+}
+
+.chip {
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary, #62708a);
+  cursor: pointer;
+}
+
+.chip.chip-partido.chip-active {
+  background: var(--turn-partido-bg);
+  border-color: var(--turn-partido-border);
+  color: var(--turn-partido-text);
+}
+
+.chip.chip-normal.chip-active {
+  background: var(--turn-normal-bg);
+  border-color: var(--turn-normal-border);
+  color: var(--turn-normal-text);
+}
+
+.chip.chip-doblado.chip-active {
+  background: var(--turn-doblado-bg);
+  border-color: var(--turn-doblado-border);
+  color: var(--turn-doblado-text);
+}
+
+.chip.chip-descanso.chip-active {
+  background: var(--turn-descanso-bg);
+  border-color: var(--turn-descanso-border);
+  color: var(--turn-descanso-text);
+}
+
+.branch-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #fff;
+}
+
+.branch-badge.branch-badge-avenida {
+  background: var(--branch-avenida);
+}
+
+.branch-badge.branch-badge-unicentro {
+  background: var(--branch-unicentro);
+}
+
+.branch-badge.branch-badge-unico {
+  background: var(--branch-unico);
 }
 
 .badge {
