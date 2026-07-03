@@ -146,6 +146,9 @@ const getAssignedShiftKind = (shift: Shift | undefined, branch: Branch | undefin
   return undefined;
 };
 
+const getEffectiveBranchId = (employee: Employee, shift: Shift | undefined): string =>
+  shift?.overrideBranchId ?? employee.branchId;
+
 const formatShiftRange = (shift: Shift | undefined) => {
   if (!shift) return 'Sin turno asignado';
   if (shift.restDay) return 'Descanso';
@@ -396,7 +399,7 @@ function App() {
 
     const previousShift = shiftsByKey.get(buildShiftKey(employee.id, selectedPeriod.id, date));
     const previousShiftJson = previousShift ? JSON.stringify(previousShift) : null;
-    const branch = branchesMap.get(employee.branchId);
+    const branch = branchesMap.get(getEffectiveBranchId(employee, previousShift));
 
     if (activeBrush === 'descanso') {
       upsertShift(employee.id, date, {
@@ -918,7 +921,8 @@ function App() {
                                 const shift =
                                   selectedPeriod &&
                                   shiftsByKey.get(buildShiftKey(employee.id, selectedPeriod.id, date));
-                                const branch = branchesMap.get(employee.branchId);
+                                const effectiveBranchId = getEffectiveBranchId(employee, shift || undefined);
+                                const branch = branchesMap.get(effectiveBranchId);
                                 const cellKey = `${employee.id}|${date}`;
                                 const isSelectorOpen = openCell === cellKey;
                                 const isCustomizing = customizingCells[cellKey] ?? false;
@@ -987,6 +991,11 @@ function App() {
                                       >
                                         {activeKind ? shiftKindLabel(activeKind) : '—'}
                                       </button>
+                                      {shift?.overrideBranchId && (
+                                        <small className="override-indicator">
+                                          🏢 {branchesMap.get(shift.overrideBranchId)?.name}
+                                        </small>
+                                      )}
 
                                       {isSelectorOpen && (
                                         <div className="mini-selector">
@@ -1027,6 +1036,34 @@ function App() {
 
                                           <small className="muted">Rango: {formatShiftRange(shift || undefined)}</small>
                                           {concepts && <small className="muted">Conceptos: {concepts}</small>}
+
+                                          <div className="override-menu">
+                                            <span className="override-label">🏢 Cambiar sede</span>
+                                            <div className="override-options">
+                                              {branches.map((branchOption) => (
+                                                <button
+                                                  key={branchOption.id}
+                                                  type="button"
+                                                  className={effectiveBranchId === branchOption.id ? 'active' : ''}
+                                                  onClick={() => {
+                                                    const isDefault = branchOption.id === employee.branchId;
+                                                    upsertShift(employee.id, date, {
+                                                      overrideBranchId: isDefault ? undefined : branchOption.id,
+                                                      templateId: undefined,
+                                                      startTime: undefined,
+                                                      endTime: undefined,
+                                                      secondStart: undefined,
+                                                      secondEnd: undefined,
+                                                      restDay: false
+                                                    });
+                                                    setCustomizingCells((prev) => ({ ...prev, [cellKey]: false }));
+                                                  }}
+                                                >
+                                                  {branchOption.name}
+                                                </button>
+                                              ))}
+                                            </div>
+                                          </div>
 
                                           {isCustomizing && (
                                             <div className="shift-cell customize-mode inline-customize">
