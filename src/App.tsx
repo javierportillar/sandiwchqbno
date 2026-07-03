@@ -205,14 +205,6 @@ function App() {
     setCalculationResult(result);
   };
 
-  const findNormalTemplate = (branch: Branch, employee: Employee) => {
-    return branch.shiftTemplates.find(
-      (t) =>
-        t.kind === 'normal' &&
-        (!t.role || t.role === employee.role)
-    );
-  };
-
   const upsertShift = (employeeId: string, date: string, patch: Partial<Shift>) => {
     if (!selectedPeriod) {
       return;
@@ -248,16 +240,22 @@ function App() {
       if (!branch) {
         continue;
       }
-      const normalTemplate = findNormalTemplate(branch, employee);
       for (const date of periodDates) {
         const key = buildShiftKey(employee.id, selectedPeriod.id, date);
         if (shiftsByKey.has(key)) {
           continue;
         }
+        const template = resolveTemplateForDate(branch, date, {
+          kind: 'normal',
+          role: employee.role
+        });
         upsertShift(employee.id, date, {
-          startTime: normalTemplate?.startTime ?? branch.defaultStartTime,
-          endTime: normalTemplate?.endTime ?? branch.defaultEndTime,
-          breakMinutes: normalTemplate?.breakMinutes ?? 60,
+          startTime: template?.startTime ?? branch.defaultStartTime,
+          endTime: template?.endTime ?? branch.defaultEndTime,
+          secondStart: template?.secondStart,
+          secondEnd: template?.secondEnd,
+          templateId: template?.id,
+          breakMinutes: template?.breakMinutes ?? 60,
           restDay: false
         });
       }
@@ -580,7 +578,7 @@ function App() {
                     <td>{employee.documentId ?? '-'}</td>
                     <td>{branchesMap.get(employee.branchId)?.name}</td>
                     <td>
-                      {branchesMap.get(employee.branchId)?.name === 'Avenida' ? (
+                      {employee.branchId === 'branch-avenida' ? (
                         <select
                           value={employee.role ?? ''}
                           onChange={(event) =>
