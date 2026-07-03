@@ -211,8 +211,9 @@ Cada empleado se ubica con un chip de turno. El sistema conoce las horas exactas
 | Modelo `ShiftTemplate` + rol de empleado | ✅ Completa | F1.4a (`9a8679a`) + F1.4b (`85fc267`→`2274644`). 18 plantillas por sede/rol/dayScope. |
 | Motor de dos tramos para turno partido | ✅ Completa | `secondStart`/`secondEnd` explícitos como ruta primaria (`3e7a7ff`). Heurístico legacy como fallback. |
 | Clasificación `RN_DOM` para domingo nocturno | ✅ Resuelta | `classifySegments` emite `RN_DOM` en vez de `DOM18` para segmentos dominicales nocturnos. |
-| Celda de horario con chips de turno y color por sede | 🔴 Pendiente | Fase 2. Bloqueada hasta cerrar F1.4a + F1.4b. |
-| Paleta por sede + franja + leyenda | 🔴 Pendiente | Fase 3. |
+| Celda de horario con chips de turno | ✅ Completa | Fase 2. Chips + Personalizar (`bc1ad36` + `4808828`). |
+| Selector de rol en Empleados | ✅ Completa | Fase 2.3 (`bc1ad36`). Sala / Domicilio en Avenida. |
+| Paleta por sede + franja + leyenda | 🟡 Paleta firmada, implementación pendiente | Fase 3.1 con hex definidos. |
 | Agrupar filas por sede + copiar/pegar por plantilla | 🔴 Pendiente | Fase 4. |
 | Tests contra pptx (18 casos: 3 sedes × 3 turnos × dayScopes) | 🔴 Pendiente | Fase 5. |
 | Regla "3+ domingos → compensatorio" | ⏳ Roadmap V2 | Fuera de MVP por decisión de PO. |
@@ -247,23 +248,21 @@ Aceptación de PO 2026-07-02 con Opción B: no se hace revert, se completa en Fa
 | **F1.4a** | Agregar en `payroll.ts` los tipos que faltaron en F1.1: `ShiftKind`, `DayScope`, `EmployeeRole`, `ShiftTemplate`, `Branch.shiftTemplates`, `Shift.secondStart?`/`secondEnd?`, `Employee.role?`. | `9a8679a` | ✅ 6 tipos nuevos, sin `any`, `tsc` verde |
 | **F1.4b** | Eliminar `seededTemplates` global y `ShiftTemplateSeed` de `seed.ts`. Poblar `seededBranches[i].shiftTemplates` con las 6 combinaciones exactas de la sección 4.2 del pptx. | `85fc267` → `2274644` (retry) | ✅ 18 plantillas (6 partido + 6 normal + 6 doblado). 1:1 con pptx. |
 | **F1.4c** | Migrar `splitShiftIntoSegments` del heurístico a lectura literal de `shift.secondStart`/`shift.secondEnd`. | `3e7a7ff` | ✅ Ruta explícita primero, heurístico como fallback legacy. Test dual (explícito + legacy). |
-| **F1.4d** | Fixes post-auditoría: preload con templates, copy/paste metadata, RN_DOM, audit deps, higiene. | Pendiente | ✅ `fillDefaultsForPeriod` usa shiftTemplates. `applyCopyToTargets` preserva `templateId`/`secondStart`/`secondEnd`. `classifySegments` emite `RN_DOM`. `npm audit fix`. `.gitignore` actualizado. |
+| **F1.4d** | Fixes post-auditoría: preload con templates, copy/paste metadata, RN_DOM, audit deps, higiene. | `d3a5e9f` | ✅ `fillDefaultsForPeriod` usa shiftTemplates. `applyCopyToTargets` preserva `templateId`/`secondStart`/`secondEnd`. `classifySegments` emite `RN_DOM`. `npm audit fix`. `.gitignore` actualizado. |
 
-### Fase 2 · UI: chips de turno con color por sede
+### Fase 2 · UI: chips de turno con color por sede ✅ COMPLETADA
 
-### Fase 2 · UI: chips de turno con color por sede
-
-| ID | Tarea | Responsable | Revisor | DoD |
-|---|---|---|---|---|
-| **F2.1** | Nuevo módulo `src/lib/templates.ts` con `resolveTemplateForDate(branch, dateISO, role?, kind)`. Tests en `src/tests/templates.test.ts`. | Dev Frontend | Revisor | Domingo 2026-01-04 con Unicentro + `partido` devuelve la plantilla 10:00-14:00 + 18:00-22:00. Cobertura de los 6 dayScopes. |
-| **F2.2** | Rediseñar la celda de horario en `src/App.tsx`: 4 chips (Partido/Normal/Doblado/Descanso) + botón "Personalizar" colapsable. | Dev Frontend | Revisor | Un click en "Doblado" en un domingo de Unicentro llena la celda con 10:00-22:00. |
-| **F2.3** | Selector "Rol" en Empleados, visible solo cuando `branchId === 'branch-avenida'`. Opciones: Sala / Domicilio. | Dev Frontend | Revisor | Empleado de Avenida sin rol asignado no rompe el flujo. |
+| ID | Tarea | Commit | DoD |
+|---|---|---|---|
+| **F2.1** | Nuevo módulo `src/lib/templates.ts` con `resolveTemplateForDate` + `listTemplatesForDate`. Tests en `src/tests/templates.test.ts`. | `f293167` | ✅ 11 tests verdes, cubre los 5 dayScopes y filtro por rol. |
+| **F2.2** | Rediseñar la celda de horario en `src/App.tsx`: chips Partido/Normal/Doblado + botón "Personalizar" con 2 tramos. | `bc1ad36` → `4808828` | ✅ Click en chip → `resolveTemplateForDate` autocompleta start/end/secondStart/secondEnd/breakMinutes/templateId. Modo Personalizar preserva tramos. |
+| **F2.3** | Selector "Rol" en Empleados (Sin rol / Sala / Domicilio) + edición inline en tabla. | `bc1ad36` | ✅ Rol persiste en `Employee.role`. Chips en Avenida filtran por rol del empleado. |
 
 ### Fase 3 · Paleta y layout
 
 | ID | Tarea | Responsable | Revisor | DoD |
 |---|---|---|---|---|
-| **F3.1** | CSS custom properties en `src/styles.css`: `--branch-*` y `--turn-*`. Aplicar borde-izquierdo (4px) de sede y fondo suave del chip activo con color de turno. | Dev Frontend | PO (paleta) + Revisor (contraste WCAG AA) | Contraste texto/fondo ≥ 4.5:1 en todos los chips. |
+| **F3.1** | CSS custom properties en `src/styles.css`. Paleta oficial firmada (PO delegó al Revisor 2026-07-02):<br>**Sedes** (borde-izquierdo 6px + badge): `--branch-avenida: #DC2626`, `--branch-unicentro: #1E40AF`, `--branch-unico: #15803D`.<br>**Turnos** (chip activo): `--turn-partido: #D97706` (fondo `#FEF3C7`, texto `#92400E`), `--turn-normal: #0891B2` (fondo `#CFFAFE`, texto `#0E7490`), `--turn-doblado: #7C3AED` (fondo `#EDE9FE`, texto `#5B21B6`), `--turn-descanso: #6B7280` (fondo `#F3F4F6`, texto `#374151`). | Dev Frontend | Revisor (audita implementación vs spec) | Todas las variables definidas. Contraste ≥ 4.5:1 en todos los chips. Celda muestra borde de sede + chip activo del turno. |
 | **F3.2** | Leyenda arriba de la tabla + badge de sede en primera columna. | Dev Frontend | PO | Leyenda coincide con los colores usados en la grilla. |
 
 ### Fase 4 · QoL
@@ -437,7 +436,9 @@ Tipos: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`. **La categoría refle
 - **Commits directos a main durante MVP pre-producción.** Sin ramas, sin PRs. Ver sección 3.
 - **Jornada ordinaria = 7h/día** (`dailyOrdinaryHours = 7`). Firmado por PO 2026-07-02. El pptx refleja el pacto interno de la empresa, no la jornada legal estándar de 8h. Aplicado en `defaultSettings` y en `applyOrdinaryVsExtra`.
 - **Fase 1 aceptada parcial (Opción B) 2026-07-02.** No se hizo revert de los commits `1a6a61a` + `645fb78` + `3d80827` + `a500c70`. Los faltantes de F1.1 y F1.2 se completaron en Fase 1.4 correctiva (`9a8679a` + `85fc267`→`2274644` + `3e7a7ff`). El motor F1.3 se migró a `secondStart`/`secondEnd` explícitos, el heurístico legacy queda como fallback.
-- **F1.4d (2026-07-02) — Fixes post-auditoría.** `fillDefaultsForPeriod` usa `shiftTemplates` en vez de `defaultStartTime`/`defaultEndTime`. Copy/paste preserva `templateId`, `secondStart`, `secondEnd`. `classifySegments` emite `RN_DOM` para domingo nocturno. Resuelto `npm audit` safe. Limpieza `.gitignore`.
+- **F1.4d (2026-07-02) — Fixes post-auditoría.** `fillDefaultsForPeriod` usa `shiftTemplates` en vez de `defaultStartTime`/`defaultEndTime`. Copy/paste preserva `templateId`, `secondStart`, `secondEnd`. Resuelto `npm audit` safe. Limpieza `.gitignore`.
+- **Domingo nocturno se clasifica como `RN_DOM` (tarifa 1,15) — firmado por PO 2026-07-02.** Antes se emitía `DOM18` (tarifa 1,80) para todo segmento dominical nocturno. La nueva regla en `classifySegments` reserva `DOM18` para tramos dominicales nocturnos que exceden la jornada ordinaria y emite `RN_DOM` para los que caen dentro. Cambia lo que se paga; el pptx sección 4.1 lo tolera (`RN_DOM = 0,35 + 0,80 = 1,15`).
+- **Paleta oficial de sedes y turnos — firmada por Revisor con delegación explícita del PO 2026-07-02.** Sedes: Avenida `#DC2626`, Unicentro `#1E40AF`, Único `#15803D`. Turnos: Partido `#D97706`, Normal `#0891B2`, Doblado `#7C3AED`, Descanso `#6B7280`. Todas ≥ 4.5:1 contraste WCAG AA sobre blanco. Ver F3.1 para uso en CSS.
 - **`localStorage` como único backend del MVP.** Migrar a Supabase queda como V2.
 - **Un solo componente `App.tsx` para el MVP.** Rompemos en subcomponentes cuando pase 1000 líneas o el Revisor lo pida.
 - **CSS custom properties, no Tailwind.**
@@ -445,7 +446,7 @@ Tipos: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`. **La categoría refle
 
 ### Decisiones abiertas (esperan PO)
 
-- Paleta exacta de colores por sede y turno (borrador propuesto en F3.1).
+- Si el operador puede editar directamente el catálogo de `shiftTemplates` desde la UI de Configuración, o solo devs pueden.
 - Si el operador puede editar directamente el catálogo de `shiftTemplates` desde la UI.
 - Si el `.xlsx` de exportación necesita una hoja extra con desglose por sede.
 
