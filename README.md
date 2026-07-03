@@ -265,15 +265,21 @@ Aceptación de PO 2026-07-02 con Opción B: no se hace revert, se completa en Fa
 | **F3.1** | CSS custom properties en `src/styles.css`. Paleta oficial firmada (PO delegó al Revisor 2026-07-02):<br>**Sedes** (borde-izquierdo 6px + badge): `--branch-avenida: #DC2626`, `--branch-unicentro: #1E40AF`, `--branch-unico: #15803D`.<br>**Turnos** (chip activo): `--turn-partido: #D97706` (fondo `#FEF3C7`, texto `#92400E`), `--turn-normal: #0891B2` (fondo `#CFFAFE`, texto `#0E7490`), `--turn-doblado: #7C3AED` (fondo `#EDE9FE`, texto `#5B21B6`), `--turn-descanso: #6B7280` (fondo `#F3F4F6`, texto `#374151`). | Dev Frontend | Revisor (audita implementación vs spec) | Todas las variables definidas. Contraste ≥ 4.5:1 en todos los chips. Celda muestra borde de sede + chip activo del turno. |
 | **F3.2** | Leyenda arriba de la tabla + badge de sede en primera columna. | Dev Frontend | PO | Leyenda coincide con los colores usados en la grilla. |
 
-### Fase 4 · UX de asignación (redefinida 2026-07-03)
+### Fase 4 · UX de asignación (redefinida 2026-07-03, re-scoped tras F4.1)
 
-Rediseño firmado por PO tras uso real: el flujo copy/paste anterior era poco natural para un operador de nómina. Reemplazo por un **modo pincel** de asignación + **vista agrupada por sede** + **override de sede por día**.
+Rediseño firmado por PO tras uso real. Hallazgo clave del Revisor tras F4.1: la celda mostraba **potencial** (4 botones siempre visibles × 15 días) en vez de **estado** (el turno asignado). Eso invertía la lectura y causaba la sensación de "se perdió la lógica". La solución es la **celda-estado** (un chip por día = el turno asignado) + **pincel** brush-first + **override de sede**. La celda-estado absorbe lo que iba a ser la vista resumen semanal (antes V2.0), así que ya no hace falta pantalla aparte.
+
+**Decisión de interacción firmada por PO 2026-07-03: Opción A (pincel manda).** Con un turno activo en el pincel, clic en cualquier día lo asigna/sobreescribe. El mini-selector (clic sin pincel) es el respaldo para el día suelto.
+
+| ID | Tarea | Estado | Comentario |
+|---|---|---|---|
+| **F4.1** | Vista de Horarios agrupada por sede, secciones colapsables. | ✅ `a059273` | Firmado. Header con mejora de jerarquía pendiente en F4.2a. |
 
 | ID | Tarea | Responsable | Revisor | DoD |
 |---|---|---|---|---|
-| **F4.1** | Vista de Horarios agrupada por sede. Cada sede es una sección con separador que muestra su nombre en el color de la sede. Grupos colapsables (arrow). Empleados listados debajo con badge de sede + badge de rol (solo Avenida). Cada empleado mantiene sus 7 días del período con la celda de chips actual. | Dev Frontend | Revisor | Con 10 empleados repartidos en 3 sedes, la grilla se lee de un vistazo. Colapsar una sede oculta sus empleados. |
-| **F4.2** | Modo pincel de asignación. Panel arriba de la tabla con 4 chips (Partido / Normal / Doblado / Descanso) + "Sin modo". Con un chip activo, click en cualquier celda aplica ese turno (sobrescribe si había otro). Panel "Detalle de la sesión" registra cada asignación con opción de deshacer individual y "Deshacer todo". Sesión efímera (se pierde al recargar). Reemplaza el bloque "Copiar/Pegar turnos" actual. | Dev Frontend | Revisor | Con "Doblado" activo y click en 3 celdas de 2 empleados distintos → 3 entradas en el detalle. Click ✕ en una entrada → esa celda vuelve a su estado previo. |
-| **F4.3** | Override de sede por celda. En cada celda con turno asignado, un botón pequeño "cambiar sede este día" abre dropdown con las 3 sedes. Al elegir sede distinta a la del empleado, se seta `Shift.overrideBranchId` y las plantillas + el cálculo del día usan la sede override. El campo ya existe en el modelo desde el template inicial. | Dev Frontend | Revisor | Laura (Unicentro) un domingo con override a Único → plantillas ofrecidas cambian a las de Único DOM-JUE. El cálculo usa la jornada de Único. |
+| **F4.2a** | Celda-estado. Cada día muestra UN chip compacto con el turno asignado (Partido/Normal/Doblado/Descanso, color del turno) o "—" si vacío. Eliminar los 4 chips siempre-visibles. Clic en un día (sin pincel activo) abre un mini-selector con los 4 turnos + "Personalizar" (horas a mano) + preview del rango y conceptos resueltos. Mejorar el header de sede (fondo suave + nombre en bold). | Dev Frontend | Revisor | Con turnos asignados, la fila de un empleado se lee como su semana. Clic en un día abre el mini-selector; elegir un turno lo asigna y cierra el selector. |
+| **F4.2b** | Pincel + sesión. Barra arriba de la tabla con 4 chips (Partido/Normal/Doblado/Descanso) + "Sin modo" + indicador del modo activo. **Opción A**: con un turno activo, clic en cualquier día lo aplica/sobreescribe (NO abre el mini-selector). Panel "Detalle de la sesión" registra cada asignación con deshacer individual (✕) y "Deshacer todo". Sesión efímera. Eliminar el bloque "Copiar/Pegar turnos" viejo. | Dev Frontend | Revisor | Con "Doblado" activo y clic en 3 días de 2 empleados → 3 asignaciones + 3 entradas en el detalle. ✕ revierte esa celda. Sin pincel, el clic abre el mini-selector de F4.2a. |
+| **F4.3** | Override de sede por día, dentro del mini-selector de F4.2a. Botón "🏢 Cambiar sede" → elegir una de las 3 sedes. Al elegir sede ≠ base, se seta `Shift.overrideBranchId`, se limpia `templateId`, y las plantillas del día + el cálculo usan la sede override. El borde-izquierdo de la fila queda con el color de la sede BASE del empleado; solo un indicador en la celda marca el override. | Dev Frontend | Revisor | Laura (Unicentro) un domingo, override a Único → los turnos ofrecidos pasan a los de Único; el cálculo usa la jornada de Único. Volver a Unicentro limpia el override. |
 
 ### Fase 5 · Tests contra el pptx
 
@@ -457,7 +463,7 @@ Tipos: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`. **La categoría refle
 
 ## 12 · Roadmap post-MVP
 
-- **V2.0 · Vista resumen semanal por sede (tipo pauta).** Tabla ultracompacta agrupada por sede que muestra la semana de UN vistazo (`L M X J V S D` con los chips coloreados por fila de empleado). Es lo que era la F4.4 propuesta; el PO la difirió a V2 el 2026-07-03 porque con F4.1+F4.2+F4.3 ya hay UX suficiente para arrancar producción.
+- **V2.0 · ~~Vista resumen semanal~~ — ABSORBIDA en F4.2a (2026-07-03).** La celda-estado convierte la grilla principal en la vista semanal; ya no hace falta pantalla aparte.
 - **V2.1 · Regla de 3+ domingos → compensatorio.** Lógica de mes calendario, cruza quincenas.
 - **V2.2 · Modo pincel con selección de rango (shift-click).** El pincel MVP es multi-click a mano; V2 agrega arrastrar / seleccionar rango.
 - **V2.3 · Historial persistente de asignaciones.** El "Detalle de la sesión" del pincel es efímero; V2 lo guarda por quincena para auditoría.
