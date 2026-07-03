@@ -204,6 +204,11 @@ small.muted {
   border-left: 6px solid var(--branch-unico);
 }
 
+.cell-state-mode {
+  min-width: 86px;
+  position: relative;
+}
+
 .chip {
   border-radius: 999px;
   padding: 4px 12px;
@@ -237,6 +242,54 @@ small.muted {
   background: var(--turn-descanso-bg);
   border-color: var(--turn-descanso-border);
   color: var(--turn-descanso-text);
+}
+
+.chip.chip-custom.chip-active {
+  background: #edf3fb;
+  border-color: #93a4c1;
+  color: #31425f;
+}
+
+.chip-compact {
+  width: 100%;
+  padding: 3px 8px;
+  text-align: center;
+}
+
+.cell-placeholder {
+  width: 100%;
+  border: 1px dashed var(--border, #dce5f2);
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: #f8fbff;
+  color: var(--text-secondary, #62708a);
+  cursor: pointer;
+}
+
+.mini-selector {
+  display: grid;
+  gap: 8px;
+  min-width: 220px;
+  margin-top: 6px;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid var(--border, #dce5f2);
+  border-radius: 12px;
+  box-shadow: 0 10px 24px rgba(20, 33, 61, 0.12);
+  position: relative;
+  z-index: 2;
+}
+
+.mini-selector-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.inline-customize {
+  min-width: 190px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border, #dce5f2);
 }
 
 .branch-badge {
@@ -299,7 +352,7 @@ small.muted {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  background: transparent;
+  background: rgba(0, 0, 0, 0.03);
   border: 0;
   cursor: pointer;
   font-size: 14px;
@@ -307,7 +360,7 @@ small.muted {
 }
 
 .branch-header-toggle:hover {
-  background: rgba(0, 0, 0, 0.03);
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .branch-header-count {
