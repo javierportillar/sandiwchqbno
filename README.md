@@ -214,7 +214,7 @@ Cada empleado se ubica con un chip de turno. El sistema conoce las horas exactas
 | Celda de horario con chips de turno | ✅ Completa | Fase 2. Chips + Personalizar (`bc1ad36` + `4808828`). |
 | Selector de rol en Empleados | ✅ Completa | Fase 2.3 (`bc1ad36`). Sala / Domicilio en Avenida. |
 | Paleta por sede + franja + leyenda | 🟡 Paleta firmada, implementación pendiente | Fase 3.1 con hex definidos. |
-| Agrupar filas por sede + copiar/pegar por plantilla | 🔴 Pendiente | Fase 4. |
+| Vista agrupada por sede + modo pincel + override de sede | 🔴 Pendiente | Fase 4 redefinida 2026-07-03 (F4.1/F4.2/F4.3). |
 | Tests contra pptx (18 casos: 3 sedes × 3 turnos × dayScopes) | 🔴 Pendiente | Fase 5. |
 | Regla "3+ domingos → compensatorio" | ⏳ Roadmap V2 | Fuera de MVP por decisión de PO. |
 
@@ -265,12 +265,15 @@ Aceptación de PO 2026-07-02 con Opción B: no se hace revert, se completa en Fa
 | **F3.1** | CSS custom properties en `src/styles.css`. Paleta oficial firmada (PO delegó al Revisor 2026-07-02):<br>**Sedes** (borde-izquierdo 6px + badge): `--branch-avenida: #DC2626`, `--branch-unicentro: #1E40AF`, `--branch-unico: #15803D`.<br>**Turnos** (chip activo): `--turn-partido: #D97706` (fondo `#FEF3C7`, texto `#92400E`), `--turn-normal: #0891B2` (fondo `#CFFAFE`, texto `#0E7490`), `--turn-doblado: #7C3AED` (fondo `#EDE9FE`, texto `#5B21B6`), `--turn-descanso: #6B7280` (fondo `#F3F4F6`, texto `#374151`). | Dev Frontend | Revisor (audita implementación vs spec) | Todas las variables definidas. Contraste ≥ 4.5:1 en todos los chips. Celda muestra borde de sede + chip activo del turno. |
 | **F3.2** | Leyenda arriba de la tabla + badge de sede en primera columna. | Dev Frontend | PO | Leyenda coincide con los colores usados en la grilla. |
 
-### Fase 4 · QoL
+### Fase 4 · UX de asignación (redefinida 2026-07-03)
+
+Rediseño firmado por PO tras uso real: el flujo copy/paste anterior era poco natural para un operador de nómina. Reemplazo por un **modo pincel** de asignación + **vista agrupada por sede** + **override de sede por día**.
 
 | ID | Tarea | Responsable | Revisor | DoD |
 |---|---|---|---|---|
-| **F4.1** | Agrupar filas por sede con fila-separador colapsable. | Dev Frontend | Revisor | Con 30 empleados en 3 sedes, la grilla queda escaneable. |
-| **F4.2** | Copiar/pegar migra a `templateId + kind`. Al pegar, resolver plantilla contra fecha destino. | Dev Frontend | Revisor | Copiar un Doblado del lunes a un domingo en Unicentro **no** pega 11-22 sino 10-22. |
+| **F4.1** | Vista de Horarios agrupada por sede. Cada sede es una sección con separador que muestra su nombre en el color de la sede. Grupos colapsables (arrow). Empleados listados debajo con badge de sede + badge de rol (solo Avenida). Cada empleado mantiene sus 7 días del período con la celda de chips actual. | Dev Frontend | Revisor | Con 10 empleados repartidos en 3 sedes, la grilla se lee de un vistazo. Colapsar una sede oculta sus empleados. |
+| **F4.2** | Modo pincel de asignación. Panel arriba de la tabla con 4 chips (Partido / Normal / Doblado / Descanso) + "Sin modo". Con un chip activo, click en cualquier celda aplica ese turno (sobrescribe si había otro). Panel "Detalle de la sesión" registra cada asignación con opción de deshacer individual y "Deshacer todo". Sesión efímera (se pierde al recargar). Reemplaza el bloque "Copiar/Pegar turnos" actual. | Dev Frontend | Revisor | Con "Doblado" activo y click en 3 celdas de 2 empleados distintos → 3 entradas en el detalle. Click ✕ en una entrada → esa celda vuelve a su estado previo. |
+| **F4.3** | Override de sede por celda. En cada celda con turno asignado, un botón pequeño "cambiar sede este día" abre dropdown con las 3 sedes. Al elegir sede distinta a la del empleado, se seta `Shift.overrideBranchId` y las plantillas + el cálculo del día usan la sede override. El campo ya existe en el modelo desde el template inicial. | Dev Frontend | Revisor | Laura (Unicentro) un domingo con override a Único → plantillas ofrecidas cambian a las de Único DOM-JUE. El cálculo usa la jornada de Único. |
 
 ### Fase 5 · Tests contra el pptx
 
@@ -454,7 +457,10 @@ Tipos: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`. **La categoría refle
 
 ## 12 · Roadmap post-MVP
 
+- **V2.0 · Vista resumen semanal por sede (tipo pauta).** Tabla ultracompacta agrupada por sede que muestra la semana de UN vistazo (`L M X J V S D` con los chips coloreados por fila de empleado). Es lo que era la F4.4 propuesta; el PO la difirió a V2 el 2026-07-03 porque con F4.1+F4.2+F4.3 ya hay UX suficiente para arrancar producción.
 - **V2.1 · Regla de 3+ domingos → compensatorio.** Lógica de mes calendario, cruza quincenas.
+- **V2.2 · Modo pincel con selección de rango (shift-click).** El pincel MVP es multi-click a mano; V2 agrega arrastrar / seleccionar rango.
+- **V2.3 · Historial persistente de asignaciones.** El "Detalle de la sesión" del pincel es efímero; V2 lo guarda por quincena para auditoría.
 - **V2.2 · Multiusuario con Supabase.** Auth por PIN, RLS por empresa, sync realtime.
 - **V2.3 · Vista mensual además de quincenal.**
 - **V2.4 · Editor visual de plantillas.**
