@@ -285,6 +285,54 @@ small.muted {
   margin-right: 4px;
 }
 
+.branch-header {
+  background: var(--surface-1, #f8fbff);
+}
+
+.branch-header td {
+  padding: 0;
+}
+
+.branch-header-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 14px;
+  text-align: left;
+}
+
+.branch-header-toggle:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.branch-header-count {
+  color: var(--text-secondary, #62708a);
+  font-size: 12px;
+}
+
+.branch-header-arrow {
+  margin-left: auto;
+  color: var(--text-secondary, #62708a);
+  font-size: 14px;
+}
+
+.branch-header-avenida .branch-header-toggle {
+  border-left: 6px solid var(--branch-avenida);
+}
+
+.branch-header-unicentro .branch-header-toggle {
+  border-left: 6px solid var(--branch-unicentro);
+}
+
+.branch-header-unico .branch-header-toggle {
+  border-left: 6px solid var(--branch-unico);
+}
+
 .badge {
   padding: 2px 8px;
   border-radius: 999px;
