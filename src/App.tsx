@@ -108,6 +108,16 @@ const branchClassSuffix = (branchId: string): 'avenida' | 'unicentro' | 'unico' 
 };
 
 type CellShiftKind = ShiftKind | 'custom';
+type BrushKind = ShiftKind | null;
+
+interface SessionAssignment {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  date: string;
+  kind: ShiftKind;
+  previousShiftJson: string | null;
+}
 
 const shiftKindLabel = (kind: CellShiftKind) => {
   if (kind === 'partido') return 'Part';
@@ -183,12 +193,8 @@ function App() {
   const [customizingCells, setCustomizingCells] = useState<Record<string, boolean>>({});
   const [collapsedBranches, setCollapsedBranches] = useState<Set<string>>(() => new Set());
   const [openCell, setOpenCell] = useState<string | null>(null);
-
-  const [copySource, setCopySource] = useState<{ employeeId: string; date: string }>({
-    employeeId: '',
-    date: ''
-  });
-  const [copyTargetDates, setCopyTargetDates] = useState<string[]>([]);
+  const [activeBrush, setActiveBrush] = useState<BrushKind>(null);
+  const [sessionAssignments, setSessionAssignments] = useState<SessionAssignment[]>([]);
 
   useEffect(() => saveState(KEY.branches, branches), [branches]);
   useEffect(() => saveState(KEY.employees, employees), [employees]);
@@ -383,34 +389,84 @@ function App() {
     setSelectedPeriodId(period.id);
   };
 
-  const sourceShift = selectedPeriod
-    ? shiftsByKey.get(buildShiftKey(copySource.employeeId, selectedPeriod.id, copySource.date))
-    : undefined;
-
-  const applyCopyToTargets = () => {
-    if (!selectedPeriod || !sourceShift || !copySource.employeeId) {
+  const applyBrush = (employee: Employee, date: string) => {
+    if (!activeBrush || !selectedPeriod) {
       return;
     }
 
-    const patch: Partial<Shift> = {
-      startTime: sourceShift.startTime,
-      endTime: sourceShift.endTime,
-      breakMinutes: sourceShift.breakMinutes,
-      restDay: sourceShift.restDay,
-      templateId: sourceShift.templateId,
-      secondStart: sourceShift.secondStart,
-      secondEnd: sourceShift.secondEnd
-    };
+    const previousShift = shiftsByKey.get(buildShiftKey(employee.id, selectedPeriod.id, date));
+    const previousShiftJson = previousShift ? JSON.stringify(previousShift) : null;
+    const branch = branchesMap.get(employee.branchId);
 
-    for (const date of copyTargetDates) {
-      upsertShift(copySource.employeeId, date, patch);
+    if (activeBrush === 'descanso') {
+      upsertShift(employee.id, date, {
+        restDay: true,
+        templateId: undefined,
+        startTime: undefined,
+        endTime: undefined,
+        secondStart: undefined,
+        secondEnd: undefined
+      });
+    } else {
+      const template = resolveTemplateForDate(branch, date, {
+        role: employee.role,
+        kind: activeBrush
+      });
+      if (!template) {
+        return;
+      }
+      upsertShift(employee.id, date, {
+        templateId: template.id,
+        startTime: template.startTime,
+        endTime: template.endTime,
+        secondStart: template.secondStart,
+        secondEnd: template.secondEnd,
+        breakMinutes: template.breakMinutes,
+        restDay: false
+      });
     }
+
+    setOpenCell(null);
+    setCustomizingCells((prev) => ({ ...prev, [`${employee.id}|${date}`]: false }));
+    setSessionAssignments((prev) => [
+      ...prev,
+      {
+        id: uid('session'),
+        employeeId: employee.id,
+        employeeName: employee.fullName,
+        date,
+        kind: activeBrush,
+        previousShiftJson
+      }
+    ]);
   };
 
-  const toggleTargetDate = (date: string) => {
-    setCopyTargetDates((prev) =>
-      prev.includes(date) ? prev.filter((item) => item !== date) : [...prev, date]
-    );
+  const restoreAssignmentInList = (items: Shift[], assignment: SessionAssignment) => {
+    if (!selectedPeriod) {
+      return items;
+    }
+    const isSameShift = (shift: Shift) =>
+      shift.employeeId === assignment.employeeId &&
+      shift.payPeriodId === selectedPeriod.id &&
+      shift.date === assignment.date;
+
+    if (assignment.previousShiftJson) {
+      const previous = JSON.parse(assignment.previousShiftJson) as Shift;
+      return [...items.filter((shift) => !isSameShift(shift)), previous];
+    }
+
+    return items.filter((shift) => !isSameShift(shift));
+  };
+
+  const undoAssignment = (assignment: SessionAssignment) => {
+    setShifts((prev) => restoreAssignmentInList(prev, assignment));
+    setSessionAssignments((prev) => prev.filter((item) => item.id !== assignment.id));
+  };
+
+  const undoAllSession = () => {
+    const toUndo = [...sessionAssignments].reverse();
+    setShifts((prev) => toUndo.reduce((items, assignment) => restoreAssignmentInList(items, assignment), prev));
+    setSessionAssignments([]);
   };
 
   const updateAdjustment = (employeeId: string, value: number) => {
@@ -733,64 +789,63 @@ function App() {
             </button>
           </div>
 
-          <div className="panel highlight grid">
-            <h4>Copiar/Pegar turnos en varios días</h4>
-            <div className="grid grid-2">
-              <label>
-                Empleado origen
-                <select
-                  value={copySource.employeeId}
-                  onChange={(event) =>
-                    setCopySource((prev) => ({ ...prev, employeeId: event.target.value }))
-                  }
-                >
-                  <option value="">Seleccione...</option>
-                  {filteredEmployees.map((employee) => (
-                    <option key={employee.id} value={employee.id}>
-                      {employee.fullName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Día origen
-                <select
-                  value={copySource.date}
-                  onChange={(event) =>
-                    setCopySource((prev) => ({ ...prev, date: event.target.value }))
-                  }
-                >
-                  <option value="">Seleccione...</option>
-                  {periodDates.map((date) => (
-                    <option key={date} value={date}>
-                      {date}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div className="row">
-              <small className="muted">
-                Turno origen: {sourceShift?.startTime ?? '-'} a {sourceShift?.endTime ?? '-'} | break{' '}
-                {sourceShift?.breakMinutes ?? 0} min
-              </small>
-            </div>
-
-            <div className="row">
-              {periodDates.map((date) => (
+          <div className="panel highlight grid brush-panel">
+            <div className="brush-modes">
+              <span className="brush-label">Modo asignación</span>
+              {(['partido', 'normal', 'doblado', 'descanso'] as const).map((kind) => (
                 <button
-                  key={date}
-                  className={copyTargetDates.includes(date) ? 'primary' : 'subtle'}
-                  onClick={() => toggleTargetDate(date)}
+                  key={kind}
+                  type="button"
+                  className={`chip chip-${kind} ${activeBrush === kind ? 'chip-active' : ''}`}
+                  onClick={() => setActiveBrush((prev) => (prev === kind ? null : kind))}
                 >
-                  {dayLabel(date)}
+                  {fullShiftKindLabel(kind)}
                 </button>
               ))}
+              <button
+                type="button"
+                className={`chip ${activeBrush === null ? 'chip-active-neutral' : ''}`}
+                onClick={() => setActiveBrush(null)}
+              >
+                Sin modo
+              </button>
             </div>
-            <button className="primary" onClick={applyCopyToTargets}>
-              Pegar turno origen en días seleccionados
-            </button>
+            {activeBrush && (
+              <small className="muted">
+                Modo <strong>{fullShiftKindLabel(activeBrush)}</strong> activo — clic en cualquier día para aplicar. Sobrescribe el turno existente.
+              </small>
+            )}
+
+            {sessionAssignments.length > 0 && (
+              <div className="session-detail">
+                <div className="row session-detail-header">
+                  <strong>Detalle de la sesión</strong>
+                  <button type="button" className="subtle" onClick={undoAllSession}>
+                    Deshacer todo
+                  </button>
+                </div>
+                <ul className="session-detail-list">
+                  {sessionAssignments.map((assignment) => (
+                    <li key={assignment.id}>
+                      <span className={`chip chip-${assignment.kind} chip-active`}>
+                        {shiftKindLabel(assignment.kind)}
+                      </span>
+                      <span>{assignment.employeeName}</span>
+                      <span className="muted">{assignment.date}</span>
+                      <button
+                        type="button"
+                        className="session-detail-undo"
+                        onClick={() => undoAssignment(assignment)}
+                        aria-label="Deshacer"
+                        title="Deshacer esta asignación"
+                      >
+                        ✕
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
 
           <div className="table-wrap">
@@ -921,6 +976,10 @@ function App() {
                                             : 'cell-placeholder'
                                         }
                                         onClick={() => {
+                                          if (activeBrush) {
+                                            applyBrush(employee, date);
+                                            return;
+                                          }
                                           setOpenCell((prev) => (prev === cellKey ? null : cellKey));
                                           setCustomizingCells((prev) => ({ ...prev, [cellKey]: false }));
                                         }}
