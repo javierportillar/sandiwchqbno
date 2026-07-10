@@ -214,7 +214,7 @@ Cada empleado se ubica con un chip de turno. El sistema conoce las horas exactas
 | Celda de horario con chips de turno | ✅ Completa | Fase 2. Chips + Personalizar (`bc1ad36` + `4808828`). |
 | Selector de rol en Empleados | ✅ Completa | Fase 2.3 (`bc1ad36`). Sala / Domicilio en Avenida. |
 | Paleta por sede + franja + leyenda | 🟡 Paleta firmada, implementación pendiente | Fase 3.1 con hex definidos. |
-| Vista agrupada por sede + modo pincel + override de sede | 🔴 Pendiente | Fase 4 redefinida 2026-07-03 (F4.1/F4.2/F4.3). |
+| Vista agrupada por sede + modo pincel + override de sede | 🟡 Condicionalmente corregida | Fase 4 redefinida 2026-07-03 (F4.1/F4.2/F4.3); queda pendiente la validación completa de F5. |
 | Tests contra pptx (18 casos: 3 sedes × 3 turnos × dayScopes) | 🔴 Pendiente | Fase 5. |
 | Regla "3+ domingos → compensatorio" | ⏳ Roadmap V2 | Fuera de MVP por decisión de PO. |
 

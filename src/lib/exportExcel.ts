@@ -14,6 +14,9 @@ const HOURS_COLUMNS = [
   'HEN DOMIN'
 ] as const;
 
+export const getExportBranchId = (employee: Employee, shift?: Shift): string =>
+  shift?.overrideBranchId ?? employee.branchId;
+
 export const exportPayrollExcel = async (params: {
   period: PayPeriod;
   employees: Employee[];
@@ -41,7 +44,7 @@ export const exportPayrollExcel = async (params: {
   for (const row of result.dayBreakdowns) {
     const employee = employeeMap.get(row.employeeId);
     const shift = shifts.find((s) => s.id === row.shift.id);
-    const branchName = employee ? branchMap.get(employee.branchId) : '-';
+    const branchName = employee ? branchMap.get(getExportBranchId(employee, row.shift)) : '-';
 
     detalle.addRow([
       row.employeeName,

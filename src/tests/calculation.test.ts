@@ -1,6 +1,7 @@
 import {
   aggregateDailyAndPeriod,
   applyOrdinaryVsExtra,
+  calculateShiftTotals,
   classifySegments,
   splitShiftIntoSegments
 } from '../lib/calculation';
@@ -66,6 +67,47 @@ describe('motor de cálculo de nómina', () => {
     expect(totals.RN).toBe(0);
     expect(totals.HED).toBe(4);
     expect(totals.HEN).toBe(1);
+  });
+
+  it('reinicia el cupo ordinario al cambiar de fecha calendario', () => {
+    const shift: Shift = {
+      id: 's-midnight-budget',
+      employeeId: 'emp-1',
+      payPeriodId: 'period-1',
+      date: '2026-01-01',
+      startTime: '08:00',
+      endTime: '02:00',
+      breakMinutes: 0
+    };
+
+    const totals = applyOrdinaryVsExtra(
+      classifySegments(splitShiftIntoSegments(shift, defaultSettings)),
+      defaultSettings
+    );
+
+    // 01/01: 7 ORD + 4 HED + 5 HEN; 01/02: 2 RN ordinarias.
+    expect(totals.ORD).toBe(7);
+    expect(totals.HED).toBe(4);
+    expect(totals.HEN).toBe(5);
+    expect(totals.RN).toBe(2);
+  });
+
+  it('calcula el preview del turno sin depender de un resultado agregado previo', () => {
+    const shift: Shift = {
+      id: 's-preview',
+      employeeId: 'emp-1',
+      payPeriodId: 'period-1',
+      date: '2026-01-05',
+      startTime: '08:00',
+      endTime: '17:00',
+      breakMinutes: 60
+    };
+
+    const totals = calculateShiftTotals(shift, defaultSettings);
+
+    expect(totals.ORD).toBe(7);
+    expect(totals.HED).toBe(1);
+    expect(totals.RN).toBe(0);
   });
 
   it('turno partido con secondStart/secondEnd explícitos', () => {

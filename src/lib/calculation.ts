@@ -240,16 +240,18 @@ export const applyOrdinaryVsExtra = (
   settings: PayrollSettings
 ): HourTotals => {
   const totals: HourTotals = { ...ZERO_TOTALS };
-  let ordinaryRemaining = settings.dailyOrdinaryHours * 60;
+  const ordinaryRemainingByDate = new Map<string, number>();
 
   for (const segment of segments) {
+    const ordinaryRemaining =
+      ordinaryRemainingByDate.get(segment.date) ?? settings.dailyOrdinaryHours * 60;
     const ordinaryMinutes = Math.min(segment.minutes, Math.max(0, ordinaryRemaining));
     const extraMinutes = segment.minutes - ordinaryMinutes;
 
     totals[segment.ordinaryBucket] += minutesToHours(ordinaryMinutes);
     totals[segment.extraBucket] += minutesToHours(extraMinutes);
 
-    ordinaryRemaining -= ordinaryMinutes;
+    ordinaryRemainingByDate.set(segment.date, ordinaryRemaining - ordinaryMinutes);
   }
 
   return {
@@ -264,6 +266,9 @@ export const applyOrdinaryVsExtra = (
     HEN_DOM: roundHours(totals.HEN_DOM)
   };
 };
+
+export const calculateShiftTotals = (shift: Shift, settings: PayrollSettings): HourTotals =>
+  applyOrdinaryVsExtra(classifySegments(splitShiftIntoSegments(shift, settings)), settings);
 
 const toComputedDayBreakdown = (
   shiftId: string,

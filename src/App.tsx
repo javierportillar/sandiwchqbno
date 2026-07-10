@@ -20,9 +20,11 @@ import {
   seededShifts
 } from './data/seed';
 import { fixed2, loadState, pesos, saveState, uid } from './lib/storage';
-import { aggregateDailyAndPeriod } from './lib/calculation';
+import { aggregateDailyAndPeriod, calculateShiftTotals } from './lib/calculation';
 import { exportPayrollExcel } from './lib/exportExcel';
 import { resolveTemplateForDate, listTemplatesForDate } from './lib/templates';
+import { canRestoreAssignment, restoreAssignmentInList } from './lib/brushSession';
+import type { SessionAssignment } from './lib/brushSession';
 
 const TABS: Array<{ id: AppTab; label: string }> = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -109,15 +111,6 @@ const branchClassSuffix = (branchId: string): 'avenida' | 'unicentro' | 'unico' 
 
 type CellShiftKind = ShiftKind | 'custom';
 type BrushKind = ShiftKind | null;
-
-interface SessionAssignment {
-  id: string;
-  employeeId: string;
-  employeeName: string;
-  date: string;
-  kind: ShiftKind;
-  previousShiftJson: string | null;
-}
 
 const shiftKindLabel = (kind: CellShiftKind) => {
   if (kind === 'partido') return 'Part';
@@ -249,14 +242,6 @@ function App() {
 
   const branchesMap = useMemo(() => new Map(branches.map((branch) => [branch.id, branch])), [branches]);
 
-  const dayBreakdownsByCell = useMemo(() => {
-    const map = new Map<string, CalculationResult['dayBreakdowns'][number]>();
-    for (const dayBreakdown of calculationResult?.dayBreakdowns ?? []) {
-      map.set(`${dayBreakdown.employeeId}|${dayBreakdown.date}`, dayBreakdown);
-    }
-    return map;
-  }, [calculationResult]);
-
   const periodAdjustments = selectedPeriod
     ? adjustmentsByPeriod[selectedPeriod.id] ?? {}
     : ({} as Record<string, number>);
@@ -277,9 +262,9 @@ function App() {
     setCalculationResult(result);
   };
 
-  const upsertShift = (employeeId: string, date: string, patch: Partial<Shift>) => {
+  const upsertShift = (employeeId: string, date: string, patch: Partial<Shift>): Shift | undefined => {
     if (!selectedPeriod) {
-      return;
+      return undefined;
     }
     const key = buildShiftKey(employeeId, selectedPeriod.id, date);
     const existing = shiftsByKey.get(key);
@@ -300,6 +285,8 @@ function App() {
       const withoutCurrent = prev.filter((item) => item.id !== next.id);
       return [...withoutCurrent, next];
     });
+
+    return next;
   };
 
   const fillDefaultsForPeriod = () => {
@@ -401,8 +388,9 @@ function App() {
     const previousShiftJson = previousShift ? JSON.stringify(previousShift) : null;
     const branch = branchesMap.get(getEffectiveBranchId(employee, previousShift));
 
+    let assignedShift: Shift | undefined;
     if (activeBrush === 'descanso') {
-      upsertShift(employee.id, date, {
+      assignedShift = upsertShift(employee.id, date, {
         restDay: true,
         templateId: undefined,
         startTime: undefined,
@@ -418,7 +406,7 @@ function App() {
       if (!template) {
         return;
       }
-      upsertShift(employee.id, date, {
+      assignedShift = upsertShift(employee.id, date, {
         templateId: template.id,
         startTime: template.startTime,
         endTime: template.endTime,
@@ -427,6 +415,10 @@ function App() {
         breakMinutes: template.breakMinutes,
         restDay: false
       });
+    }
+
+    if (!assignedShift) {
+      return;
     }
 
     setOpenCell(null);
@@ -439,36 +431,27 @@ function App() {
         employeeName: employee.fullName,
         date,
         kind: activeBrush,
-        previousShiftJson
+        previousShiftJson,
+        assignedShiftJson: JSON.stringify(assignedShift)
       }
     ]);
   };
 
-  const restoreAssignmentInList = (items: Shift[], assignment: SessionAssignment) => {
-    if (!selectedPeriod) {
-      return items;
-    }
-    const isSameShift = (shift: Shift) =>
-      shift.employeeId === assignment.employeeId &&
-      shift.payPeriodId === selectedPeriod.id &&
-      shift.date === assignment.date;
-
-    if (assignment.previousShiftJson) {
-      const previous = JSON.parse(assignment.previousShiftJson) as Shift;
-      return [...items.filter((shift) => !isSameShift(shift)), previous];
-    }
-
-    return items.filter((shift) => !isSameShift(shift));
-  };
-
   const undoAssignment = (assignment: SessionAssignment) => {
-    setShifts((prev) => restoreAssignmentInList(prev, assignment));
+    if (selectedPeriod && canRestoreAssignment(sessionAssignments, shifts, assignment, selectedPeriod.id)) {
+      setShifts((prev) => restoreAssignmentInList(prev, assignment, selectedPeriod.id));
+    }
     setSessionAssignments((prev) => prev.filter((item) => item.id !== assignment.id));
   };
 
   const undoAllSession = () => {
+    if (!selectedPeriod) {
+      return;
+    }
     const toUndo = [...sessionAssignments].reverse();
-    setShifts((prev) => toUndo.reduce((items, assignment) => restoreAssignmentInList(items, assignment), prev));
+    setShifts((prev) =>
+      toUndo.reduce((items, assignment) => restoreAssignmentInList(items, assignment, selectedPeriod.id), prev)
+    );
     setSessionAssignments([]);
   };
 
@@ -500,22 +483,23 @@ function App() {
     });
   };
 
-  const formatConcepts = (cellKey: string) => {
-    const dayBreakdown = dayBreakdownsByCell.get(cellKey);
-    if (!dayBreakdown) {
+  const formatConcepts = (shift: Shift | undefined) => {
+    if (!shift) {
       return '';
     }
 
+    const totals = calculateShiftTotals(shift, settings);
+
     const concepts = [
-      ['ORD', dayBreakdown.breakdown.ordHours],
-      ['RN', dayBreakdown.breakdown.rnHours],
-      ['HED', dayBreakdown.breakdown.hedHours],
-      ['HEN', dayBreakdown.breakdown.henHours],
-      ['DOM 0,8', dayBreakdown.breakdown.dom08Hours],
-      ['DOM 1,8', dayBreakdown.breakdown.dom18Hours],
-      ['RN DOM', dayBreakdown.breakdown.rnDomHours],
-      ['HED DOM', dayBreakdown.breakdown.hedDomHours],
-      ['HEN DOM', dayBreakdown.breakdown.henDomHours]
+      ['ORD', totals.ORD],
+      ['RN', totals.RN],
+      ['HED', totals.HED],
+      ['HEN', totals.HEN],
+      ['DOM 0,8', totals.DOM08],
+      ['DOM 1,8', totals.DOM18],
+      ['RN DOM', totals.RN_DOM],
+      ['HED DOM', totals.HED_DOM],
+      ['HEN DOM', totals.HEN_DOM]
     ]
       .filter(([, hours]) => Number(hours) > 0)
       .map(([label, hours]) => `${label} ${fixed2(Number(hours))}`);
@@ -930,7 +914,7 @@ function App() {
                                 const availableTemplates = branch
                                   ? listTemplatesForDate(branch, date, employee.role)
                                   : [];
-                                const concepts = formatConcepts(cellKey);
+                                const concepts = formatConcepts(shift || undefined);
 
                                 const handleChip = (kind: ShiftKind) => {
                                   if (kind === 'descanso') {
