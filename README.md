@@ -173,9 +173,9 @@ Cada empleado se ubica con un chip de turno. El sistema conoce las horas exactas
 
 | Turno | Franja | Desglose esperado |
 |---|---|---|
-| Partido | 10:00-14:00 + 18:00-22:00 | 5 ORD + 2 RN + 1 HEN |
-| Normal | 14:00-22:00 | 5 ORD + 2 RN + 1 HEN |
-| Doblado | 10:00-22:00 | 7 ORD + 2 HED + 3 HEN |
+| Partido | 10:00-14:00 + 18:00-22:00 | 5 DOM08 + 2 RN_DOM + 1 HEN_DOM |
+| Normal | 14:00-22:00 | 5 DOM08 + 2 RN_DOM + 1 HEN_DOM |
+| Doblado | 10:00-22:00 | 7 DOM08 + 2 HED_DOM + 3 HEN_DOM |
 
 #### Único — domingo a jueves
 
@@ -202,6 +202,10 @@ Cada empleado se ubica con un chip de turno. El sistema conoce las horas exactas
 
 ## 5 · Estado del proyecto
 
+**Estado global del MVP: ✅ COMPLETO** en alcance de código y contrato automatizado.
+
+La verificación manual end-to-end de la UI (Dashboard → Horarios → Cálculo → Exportar) queda como seguimiento de release; no se afirma como realizada en esta fase.
+
 | Módulo | Estado | Notas |
 |---|---|---|
 | Motor de cálculo `splitShiftIntoSegments` + `classifySegments` + `applyOrdinaryVsExtra` | ✅ Estable | `nocturnalStart` corregido a 19:00 en Fase 0.2. |
@@ -213,9 +217,9 @@ Cada empleado se ubica con un chip de turno. El sistema conoce las horas exactas
 | Clasificación `RN_DOM` para domingo nocturno | ✅ Resuelta | `classifySegments` emite `RN_DOM` en vez de `DOM18` para segmentos dominicales nocturnos. |
 | Celda de horario con chips de turno | ✅ Completa | Fase 2. Chips + Personalizar (`bc1ad36` + `4808828`). |
 | Selector de rol en Empleados | ✅ Completa | Fase 2.3 (`bc1ad36`). Sala / Domicilio en Avenida. |
-| Paleta por sede + franja + leyenda | 🟡 Paleta firmada, implementación pendiente | Fase 3.1 con hex definidos. |
-| Vista agrupada por sede + modo pincel + override de sede | 🟡 Condicionalmente corregida | Fase 4 redefinida 2026-07-03 (F4.1/F4.2/F4.3); queda pendiente la validación completa de F5. |
-| Tests contra pptx (18 casos: 3 sedes × 3 turnos × dayScopes) | 🔴 Pendiente | Fase 5. |
+| Paleta por sede + franja + leyenda | ✅ Completa | F3.1 (`2508d1c`) + F3.2 (`9a406ba`). |
+| Vista agrupada por sede + modo pincel + override de sede | ✅ Completa | Fase 4 cerrada en `d158bb0`; la validación automatizada de F5 queda completa. |
+| Tests contra pptx (18 casos: 3 sedes × 3 turnos × dayScopes) | ✅ Completa | Fase 5: 18/18 desgloses verdes contra plantillas seed + motor de cálculo. |
 | Regla "3+ domingos → compensatorio" | ⏳ Roadmap V2 | Fuera de MVP por decisión de PO. |
 
 ---
@@ -281,11 +285,11 @@ Rediseño firmado por PO tras uso real. Hallazgo clave del Revisor tras F4.1: la
 | **F4.2b** | Pincel + sesión. Barra arriba de la tabla con 4 chips (Partido/Normal/Doblado/Descanso) + "Sin modo" + indicador del modo activo. **Opción A**: con un turno activo, clic en cualquier día lo aplica/sobreescribe (NO abre el mini-selector). Panel "Detalle de la sesión" registra cada asignación con deshacer individual (✕) y "Deshacer todo". Sesión efímera. Eliminar el bloque "Copiar/Pegar turnos" viejo. | Dev Frontend | Revisor | Con "Doblado" activo y clic en 3 días de 2 empleados → 3 asignaciones + 3 entradas en el detalle. ✕ revierte esa celda. Sin pincel, el clic abre el mini-selector de F4.2a. |
 | **F4.3** | Override de sede por día, dentro del mini-selector de F4.2a. Botón "🏢 Cambiar sede" → elegir una de las 3 sedes. Al elegir sede ≠ base, se seta `Shift.overrideBranchId`, se limpia `templateId`, y las plantillas del día + el cálculo usan la sede override. El borde-izquierdo de la fila queda con el color de la sede BASE del empleado; solo un indicador en la celda marca el override. | Dev Frontend | Revisor | Laura (Unicentro) un domingo, override a Único → los turnos ofrecidos pasan a los de Único; el cálculo usa la jornada de Único. Volver a Unicentro limpia el override. |
 
-### Fase 5 · Tests contra el pptx
+### Fase 5 · Tests contra el pptx ✅ COMPLETADA
 
 | ID | Tarea | Responsable | Revisor | DoD |
 |---|---|---|---|---|
-| **F5** | Test suite que valida los 18 desgloses de la sección 4.2. | Revisor (dueño) + Dev Frontend (implementa) | PO | 100% verde. |
+| **F5** | Test suite que valida los 18 desgloses de la sección 4.2. | Revisor (dueño) + Dev Frontend (implementa) | PO | ✅ 18/18 casos verdes contra las plantillas seed y el motor de cálculo. |
 
 ### Puertas de calidad entre fases
 
