@@ -204,7 +204,7 @@ Cada empleado se ubica con un chip de turno. El sistema conoce las horas exactas
 
 **Estado global del MVP: ✅ COMPLETO** en alcance de código y contrato automatizado.
 
-La verificación manual end-to-end de la UI (Dashboard → Horarios → Cálculo → Exportar) queda como seguimiento de release; no se afirma como realizada en esta fase.
+La verificación manual end-to-end de la UI (Dashboard → Horarios → Cálculo → Exportar) fue ejecutada en navegador local: asignación por mini-selector, modo pincel, cambio de sede, persistencia tras recarga, cálculo y generación del flujo de exportación quedaron ejercitados. La descarga física del archivo no es observable desde el arnés de navegador usado; el contrato de `.xlsx` continúa cubierto por `src/tests/exportExcel.test.ts`.
 
 | Módulo | Estado | Notas |
 |---|---|---|
