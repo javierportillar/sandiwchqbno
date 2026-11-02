@@ -529,3 +529,8 @@ small.muted {
   border-radius: 8px;
   background: #fffaf0;
 }
+
+.review-warning {
+  color: #8b261b;
+  font-weight: 700;
+}

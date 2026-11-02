@@ -21,6 +21,8 @@ import {
 } from './data/seed';
 import { checkSnapshot, fixed2, loadState, pesos, saveState, STORAGE_KEYS as KEY, uid } from './lib/storage';
 import { LocalBackup } from './components/LocalBackup';
+import { ShiftEditor } from './components/ShiftEditor';
+import { duplicateShiftGroups, endsBeyondPeriodEnd, isEmptyShift, needsShiftReview, normalTemplateForEmployee, templateFields } from './lib/shiftSafety';
 import type { StorageReadError, StorageSnapshot } from './lib/storage';
 import { aggregateDailyAndPeriod, calculateShiftTotals } from './lib/calculation';
 import { exportPayrollExcel } from './lib/exportExcel';
@@ -93,7 +95,7 @@ const dayLabel = (dateISO: string) => {
 const buildPeriodLabel = (startDate: string, endDate: string) => `${startDate} a ${endDate}`;
 
 const buildShiftKey = (employeeId: string, periodId: string, date: string) =>
-  `${employeeId}|${periodId}|${date}`;
+  JSON.stringify([periodId, employeeId, date]);
 
 const branchClassSuffix = (branchId: string): 'avenida' | 'unicentro' | 'unico' | 'unknown' => {
   if (branchId === 'branch-avenida') return 'avenida';
@@ -306,7 +308,8 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
 
   const [selectedPeriodId, setSelectedPeriodId] = useState(periods[0]?.id ?? '');
   const [branchFilter, setBranchFilter] = useState<string>('all');
-  const [calculationResult, setCalculationResult] = useState<CalculationResult | null>(null);
+  const [calculation, setCalculation] = useState<{ result: CalculationResult; periodId: string; shifts: Shift[]; employees: Employee[]; settings: PayrollSettings; adjustments: typeof adjustmentsByPeriod } | null>(null);
+  const [scheduleNotice, setScheduleNotice] = useState('');
 
   const [newEmployee, setNewEmployee] = useState({
     fullName: '',
@@ -322,6 +325,7 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
   });
 
   const [customizingCells, setCustomizingCells] = useState<Record<string, boolean>>({});
+  const [pendingBranches, setPendingBranches] = useState<Record<string, string>>({});
   const [collapsedBranches, setCollapsedBranches] = useState<Set<string>>(() => new Set());
   const [openCell, setOpenCell] = useState<string | null>(null);
   const [activeBrush, setActiveBrush] = useState<BrushKind>(null);
@@ -352,19 +356,37 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
     return employees.filter((employee) => employee.active && employee.branchId === branchFilter);
   }, [employees, branchFilter]);
 
+  const branchesMap = useMemo(() => new Map(branches.map((branch) => [branch.id, branch])), [branches]);
+  const endsBeyondSelectedPeriod = (shift: Shift): boolean =>
+    Boolean(selectedPeriod && endsBeyondPeriodEnd(shift, selectedPeriod.endDate));
+  const isShiftReviewNeeded = (shift: Shift): boolean => {
+    if (!periodDates.includes(shift.date)) return true;
+    const employee = employees.find((item) => item.id === shift.employeeId);
+    const branch = branchesMap.get(shift.overrideBranchId ?? employee?.branchId ?? '');
+    if (!employee || !branch) return true;
+    const template = branch.shiftTemplates.find((item) => item.id === shift.templateId);
+    if (shift.templateId && !template && shift.templateId !== 'partido') return true;
+    return needsShiftReview(shift, template?.kind) || endsBeyondSelectedPeriod(shift);
+  };
+
   const employeesByBranch = useMemo(() => {
     const map = new Map<string, Employee[]>();
     for (const branch of branches) {
       map.set(branch.id, []);
     }
-    for (const employee of filteredEmployees) {
+    const reviewEmployees = new Set(shifts.filter((shift) => shift.payPeriodId === selectedPeriod?.id && isShiftReviewNeeded(shift)).map((shift) => shift.employeeId));
+    const visible = employees.filter((employee) =>
+      (employee.active || reviewEmployees.has(employee.id)) &&
+      (branchFilter === 'all' || employee.branchId === branchFilter)
+    );
+    for (const employee of visible) {
       const list = map.get(employee.branchId);
       if (list) {
         list.push(employee);
       }
     }
     return map;
-  }, [branches, filteredEmployees]);
+  }, [branches, employees, branchFilter, shifts, selectedPeriod]);
 
   const shiftsByKey = useMemo(() => {
     const map = new Map<string, Shift>();
@@ -374,14 +396,23 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
     return map;
   }, [shifts]);
 
-  const branchesMap = useMemo(() => new Map(branches.map((branch) => [branch.id, branch])), [branches]);
-
   const periodAdjustments = selectedPeriod
     ? adjustmentsByPeriod[selectedPeriod.id] ?? {}
     : ({} as Record<string, number>);
 
+  const periodShifts = selectedPeriod ? shifts.filter((shift) => shift.payPeriodId === selectedPeriod.id) : [];
+  const duplicates = duplicateShiftGroups(periodShifts);
+  const duplicateKeys = new Set(duplicates.map((group) => buildShiftKey(group[0].employeeId, group[0].payPeriodId, group[0].date)));
+  const reviewShifts = periodShifts.filter((shift) => !duplicateKeys.has(buildShiftKey(shift.employeeId, shift.payPeriodId, shift.date)) && isShiftReviewNeeded(shift));
+  const periodBoundaryReviewShifts = reviewShifts.filter(endsBeyondSelectedPeriod);
+  const hasPendingBranch = Boolean(selectedPeriod && Object.keys(pendingBranches).some((key) => JSON.parse(key)[0] === selectedPeriod.id));
+  const calculationBlocked = reviewShifts.length > 0 || duplicates.length > 0 || hasPendingBranch;
+  const calculationResult = calculation && selectedPeriod && calculation.periodId === selectedPeriod.id &&
+    calculation.shifts === shifts && calculation.employees === employees && calculation.settings === settings &&
+    calculation.adjustments === adjustmentsByPeriod && !calculationBlocked ? calculation.result : null;
+
   const runCalculation = () => {
-    if (!selectedPeriod) {
+    if (!selectedPeriod || calculationBlocked) {
       return;
     }
 
@@ -393,7 +424,7 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
       adjustments: periodAdjustments
     });
 
-    setCalculationResult(result);
+    setCalculation({ result, periodId: selectedPeriod.id, shifts, employees, settings, adjustments: adjustmentsByPeriod });
   };
 
   const upsertShift = (employeeId: string, date: string, patch: Partial<Shift>): Shift | undefined => {
@@ -401,6 +432,7 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
       return undefined;
     }
     const key = buildShiftKey(employeeId, selectedPeriod.id, date);
+    if (duplicateKeys.has(key)) return undefined;
     const existing = shiftsByKey.get(key);
 
     const base: Shift =
@@ -409,14 +441,14 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
         employeeId,
         payPeriodId: selectedPeriod.id,
         date,
-        breakMinutes: 60,
+        breakMinutes: 0,
         restDay: false
       };
 
     const next = { ...base, ...patch };
 
     setShifts((prev) => {
-      const withoutCurrent = prev.filter((item) => item.id !== next.id);
+      const withoutCurrent = prev.filter((item) => buildShiftKey(item.employeeId, item.payPeriodId, item.date) !== key);
       return [...withoutCurrent, next];
     });
 
@@ -424,35 +456,26 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
   };
 
   const fillDefaultsForPeriod = () => {
-    if (!selectedPeriod) {
-      return;
-    }
-
+    if (!selectedPeriod) return;
+    const missing: string[] = [];
     for (const employee of filteredEmployees) {
       const branch = branchesMap.get(employee.branchId);
-      if (!branch) {
-        continue;
-      }
       for (const date of periodDates) {
-        const key = buildShiftKey(employee.id, selectedPeriod.id, date);
-        if (shiftsByKey.has(key)) {
+        const cell = buildShiftKey(employee.id, selectedPeriod.id, date);
+        if (shiftsByKey.has(cell)) continue;
+        if (pendingBranches[cell]) {
+          missing.push(`${employee.fullName} (${date}, cambio de sede pendiente)`);
           continue;
         }
-        const template = resolveTemplateForDate(branch, date, {
-          kind: 'normal',
-          role: employee.role
-        });
-        upsertShift(employee.id, date, {
-          startTime: template?.startTime ?? branch.defaultStartTime,
-          endTime: template?.endTime ?? branch.defaultEndTime,
-          secondStart: template?.secondStart,
-          secondEnd: template?.secondEnd,
-          templateId: template?.id,
-          breakMinutes: template?.breakMinutes ?? 60,
-          restDay: false
-        });
+        const template = normalTemplateForEmployee(branch, employee, date);
+        if (!template) {
+          missing.push(`${employee.fullName} (${branch?.name ?? 'sede no disponible'}, ${date}${employee.role ? `, ${employee.role}` : ', sin rol'})`);
+          continue;
+        }
+        upsertShift(employee.id, date, templateFields(template));
       }
     }
+    setScheduleNotice(missing.length ? `No se precargó: ${missing.join('; ')}. Revisa sede, rol y plantilla para la fecha.` : 'Precarga terminada. Las franjas de plantilla son provisionales.');
   };
 
   const addEmployee = () => {
@@ -518,7 +541,20 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
       return;
     }
 
-    const previousShift = shiftsByKey.get(buildShiftKey(employee.id, selectedPeriod.id, date));
+    const cell = buildShiftKey(employee.id, selectedPeriod.id, date);
+    if (pendingBranches[cell]) {
+      setScheduleNotice('Hay un cambio de sede pendiente en esta celda. Asigna el turno desde el selector o cancela el cambio.');
+      return;
+    }
+    if (duplicateKeys.has(cell)) {
+      setScheduleNotice('Hay turnos duplicados en esta celda. Exporta una copia local y contacta a soporte; no se modificaron.');
+      return;
+    }
+    const previousShift = shiftsByKey.get(cell);
+    if (previousShift && isShiftReviewNeeded(previousShift) && !isEmptyShift(previousShift)) {
+      setScheduleNotice(`Revisa el turno de ${employee.fullName} (${date}) con Personalizar antes de reemplazarlo.`);
+      return;
+    }
     const previousShiftJson = previousShift ? JSON.stringify(previousShift) : null;
     const branch = branchesMap.get(getEffectiveBranchId(employee, previousShift));
 
@@ -530,7 +566,8 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
         startTime: undefined,
         endTime: undefined,
         secondStart: undefined,
-        secondEnd: undefined
+        secondEnd: undefined,
+        breakMinutes: 0
       });
     } else {
       const template = resolveTemplateForDate(branch, date, {
@@ -538,17 +575,10 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
         kind: activeBrush
       });
       if (!template) {
+        setScheduleNotice(`No hay plantilla para ${employee.fullName} (${branch?.name ?? 'sede no disponible'}, ${date}${employee.role ? `, ${employee.role}` : ', sin rol'}). Revisa sede, rol y tipo.`);
         return;
       }
-      assignedShift = upsertShift(employee.id, date, {
-        templateId: template.id,
-        startTime: template.startTime,
-        endTime: template.endTime,
-        secondStart: template.secondStart,
-        secondEnd: template.secondEnd,
-        breakMinutes: template.breakMinutes,
-        restDay: false
-      });
+      assignedShift = upsertShift(employee.id, date, templateFields(template));
     }
 
     if (!assignedShift) {
@@ -556,7 +586,7 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
     }
 
     setOpenCell(null);
-    setCustomizingCells((prev) => ({ ...prev, [`${employee.id}|${date}`]: false }));
+    setCustomizingCells((prev) => ({ ...prev, [cell]: false }));
     setSessionAssignments((prev) => [
       ...prev,
       {
@@ -618,7 +648,7 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
   };
 
   const formatConcepts = (shift: Shift | undefined) => {
-    if (!shift) {
+    if (!shift || isShiftReviewNeeded(shift)) {
       return '';
     }
 
@@ -910,6 +940,17 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
             </button>
           </div>
 
+          {scheduleNotice && <p role="status">{scheduleNotice}</p>}
+          <p>Las franjas de las plantillas son provisionales y requieren confirmación.</p>
+          {duplicates.length > 0 && <div role="alert"><p>Hay turnos duplicados. No edites esas celdas: exporta una copia local y contacta a soporte; no se borró ningún registro.</p><ul>{duplicates.map((group) => <li key={buildShiftKey(group[0].employeeId, group[0].payPeriodId, group[0].date)}>{group[0].employeeId} — {group[0].date} — IDs: {group.map((shift) => shift.id).join(', ')}</li>)}</ul></div>}
+          {hasPendingBranch && <p role="status">Hay cambios de sede pendientes. Asigna un turno o cancela cada borrador antes de calcular.</p>}
+          {reviewShifts.length > 0 && <div role="alert">
+            <p>Hay {reviewShifts.length} turno(s) que requieren revisión antes de calcular. Abre la celda y usa Personalizar para definir los tramos reales.</p>
+            {periodBoundaryReviewShifts.length > 0 && <ul>{periodBoundaryReviewShifts.map((shift) => <li key={shift.id}>
+              {employees.find((employee) => employee.id === shift.employeeId)?.fullName ?? shift.employeeId} — {shift.date}: el intervalo {formatShiftRange(shift)} termina más allá del cierre del período ({selectedPeriod?.endDate}). Cálculo y exportación bloqueados; no se aplicó un reparto ni se modificó el turno.
+            </li>)}</ul>}
+          </div>}
+
           <div className="panel highlight grid brush-panel">
             <div className="brush-modes">
               <span className="brush-label">Modo asignación</span>
@@ -994,6 +1035,7 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
                             <button
                               type="button"
                               className="branch-header-toggle"
+                              aria-expanded={!isCollapsed}
                               onClick={() =>
                                 setCollapsedBranches((prev) => {
                                   const next = new Set(prev);
@@ -1020,6 +1062,7 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
                               <td>
                                 <div className="grid">
                                   <strong>{employee.fullName}</strong>
+                                  {!employee.active && <small>Inactivo — visible para revisión de turnos</small>}
                                   <div className="row" style={{ gap: 6 }}>
                                     <span
                                       className={`branch-badge branch-badge-${branchClassSuffix(employee.branchId)}`}
@@ -1039,9 +1082,13 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
                                 const shift =
                                   selectedPeriod &&
                                   shiftsByKey.get(buildShiftKey(employee.id, selectedPeriod.id, date));
-                                const effectiveBranchId = getEffectiveBranchId(employee, shift || undefined);
+                                const cellKey = buildShiftKey(employee.id, selectedPeriod?.id ?? '', date);
+                                if (duplicateKeys.has(cellKey)) {
+                                  const group = duplicates.find((items) => buildShiftKey(items[0].employeeId, items[0].payPeriodId, items[0].date) === cellKey)!;
+                                  return <td key={cellKey}><strong>Duplicado</strong><small> IDs: {group.map((item) => item.id).join(', ')}. Exporta copia local y contacta a soporte.</small></td>;
+                                }
+                                const effectiveBranchId = pendingBranches[cellKey] ?? getEffectiveBranchId(employee, shift || undefined);
                                 const branch = branchesMap.get(effectiveBranchId);
-                                const cellKey = `${employee.id}|${date}`;
                                 const isSelectorOpen = openCell === cellKey;
                                 const isCustomizing = customizingCells[cellKey] ?? false;
                                 const activeKind = getAssignedShiftKind(shift || undefined, branch);
@@ -1051,15 +1098,22 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
                                 const concepts = formatConcepts(shift || undefined);
 
                                 const handleChip = (kind: ShiftKind) => {
+                                  if (shift && isShiftReviewNeeded(shift) && !isEmptyShift(shift)) {
+                                    setScheduleNotice(`Revisa el turno de ${employee.fullName} (${date}) con Personalizar antes de reemplazarlo.`);
+                                    return;
+                                  }
                                   if (kind === 'descanso') {
                                     upsertShift(employee.id, date, {
                                       restDay: true,
+                                      overrideBranchId: effectiveBranchId === employee.branchId ? undefined : effectiveBranchId,
                                       templateId: undefined,
                                       startTime: undefined,
                                       endTime: undefined,
                                       secondStart: undefined,
-                                      secondEnd: undefined
+                                      secondEnd: undefined,
+                                      breakMinutes: 0
                                     });
+                                    setPendingBranches((prev) => { const next = { ...prev }; delete next[cellKey]; return next; });
                                     setOpenCell(null);
                                     setCustomizingCells((prev) => ({ ...prev, [cellKey]: false }));
                                     return;
@@ -1069,21 +1123,12 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
                                     kind
                                   });
                                   if (template) {
-                                    upsertShift(employee.id, date, {
-                                      templateId: template.id,
-                                      startTime: template.startTime,
-                                      endTime: template.endTime,
-                                      secondStart: template.secondStart,
-                                      secondEnd: template.secondEnd,
-                                      breakMinutes: template.breakMinutes,
-                                      restDay: false
-                                    });
+                                    upsertShift(employee.id, date, { ...templateFields(template), overrideBranchId: effectiveBranchId === employee.branchId ? undefined : effectiveBranchId });
+                                    setPendingBranches((prev) => { const next = { ...prev }; delete next[cellKey]; return next; });
                                     setOpenCell(null);
                                     setCustomizingCells((prev) => ({ ...prev, [cellKey]: false }));
                                   }
                                 };
-
-                                const isSplit = shift?.secondStart || shift?.secondEnd;
 
                                 return (
                                   <td key={`${employee.id}-${date}`}>
@@ -1105,9 +1150,17 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
                                           setOpenCell((prev) => (prev === cellKey ? null : cellKey));
                                           setCustomizingCells((prev) => ({ ...prev, [cellKey]: false }));
                                         }}
+                                        aria-label={
+                                          shift && isShiftReviewNeeded(shift)
+                                            ? `Revisar turno de ${employee.fullName}, ${date}`
+                                            : activeKind
+                                              ? `Turno ${shiftKindLabel(activeKind)} para ${employee.fullName}, ${date}`
+                                              : `Asignar turno para ${employee.fullName}, ${date}`
+                                        }
+                                        aria-expanded={isSelectorOpen}
                                         title={formatShiftRange(shift || undefined)}
                                       >
-                                        {activeKind ? shiftKindLabel(activeKind) : '—'}
+                                        {shift && isShiftReviewNeeded(shift) ? 'Revisar' : activeKind ? shiftKindLabel(activeKind) : '—'}
                                       </button>
                                       {shift?.overrideBranchId && (
                                         <small className="override-indicator">
@@ -1127,6 +1180,7 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
                                                   type="button"
                                                   className={`chip chip-${kind} ${activeKind === kind ? 'chip-active' : ''}`}
                                                   onClick={() => handleChip(kind)}
+                                                  aria-label={`${fullShiftKindLabel(kind)} para ${employee.fullName}, ${date}`}
                                                   title={availableTemplates.find((t) => t.kind === kind)?.label ?? kind}
                                                 >
                                                   {fullShiftKindLabel(kind)}
@@ -1137,14 +1191,18 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
                                               type="button"
                                               className={`chip chip-descanso ${activeKind === 'descanso' ? 'chip-active' : ''}`}
                                               onClick={() => handleChip('descanso')}
+                                              aria-label={`Descanso para ${employee.fullName}, ${date}`}
                                             >
                                               Descanso
                                             </button>
                                           </div>
 
+                                          {availableTemplates.length === 0 && <small>No hay plantilla para esta sede, rol y fecha. Revisa el rol o define tramos reales.</small>}
+                                          {shift && isShiftReviewNeeded(shift) && <small className="review-warning">Turno pendiente de revisión: define los tramos reales en Personalizar.</small>}
                                           <button
                                             type="button"
                                             className="subtle personalize-btn"
+                                            aria-label={`Personalizar turno de ${employee.fullName}, ${date}`}
                                             onClick={() =>
                                               setCustomizingCells((prev) => ({ ...prev, [cellKey]: !isCustomizing }))
                                             }
@@ -1157,23 +1215,22 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
 
                                           <div className="override-menu">
                                             <span className="override-label">🏢 Cambiar sede</span>
+                                            {pendingBranches[cellKey] && <><small>Sede seleccionada: {branch?.name}. El cambio se guarda al asignar un turno.</small><button type="button" className="subtle" aria-label={`Cancelar cambio de sede para ${employee.fullName}, ${date}`} onClick={() => { setPendingBranches((prev) => { const next = { ...prev }; delete next[cellKey]; return next; }); setCustomizingCells((prev) => ({ ...prev, [cellKey]: false })); }}>Cancelar cambio de sede</button></>}
                                             <div className="override-options">
                                               {branches.map((branchOption) => (
                                                 <button
                                                   key={branchOption.id}
                                                   type="button"
                                                   className={effectiveBranchId === branchOption.id ? 'active' : ''}
+                                                  aria-label={`Cambiar sede a ${branchOption.name} para ${employee.fullName}, ${date}`}
                                                   onClick={() => {
-                                                    const isDefault = branchOption.id === employee.branchId;
-                                                    upsertShift(employee.id, date, {
-                                                      overrideBranchId: isDefault ? undefined : branchOption.id,
-                                                      templateId: undefined,
-                                                      startTime: undefined,
-                                                      endTime: undefined,
-                                                      secondStart: undefined,
-                                                      secondEnd: undefined,
-                                                      restDay: false
-                                                    });
+                                                    if (branchOption.id === effectiveBranchId) return;
+                                                    if (shift && isShiftReviewNeeded(shift) && !isEmptyShift(shift)) {
+                                                      setScheduleNotice(`Revisa el turno de ${employee.fullName} (${date}) antes de cambiar la sede.`);
+                                                      return;
+                                                    }
+                                                    setCalculation(null);
+                                                    setPendingBranches((prev) => ({ ...prev, [cellKey]: branchOption.id }));
                                                     setCustomizingCells((prev) => ({ ...prev, [cellKey]: false }));
                                                   }}
                                                 >
@@ -1184,90 +1241,12 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
                                           </div>
 
                                           {isCustomizing && (
-                                            <div className="shift-cell customize-mode inline-customize">
-                                              <div className="times">
-                                                <input
-                                                  type="time"
-                                                  value={shift?.startTime ?? ''}
-                                                  onChange={(event) =>
-                                                    upsertShift(employee.id, date, {
-                                                      startTime: event.target.value || undefined,
-                                                      templateId: undefined,
-                                                      restDay: false
-                                                    })
-                                                  }
-                                                />
-                                                <input
-                                                  type="time"
-                                                  value={shift?.endTime ?? ''}
-                                                  onChange={(event) =>
-                                                    upsertShift(employee.id, date, {
-                                                      endTime: event.target.value || undefined,
-                                                      templateId: undefined,
-                                                      restDay: false
-                                                    })
-                                                  }
-                                                />
-                                              </div>
-                                              {isSplit && (
-                                                <div className="times">
-                                                  <input
-                                                    type="time"
-                                                    value={shift?.secondStart ?? ''}
-                                                    placeholder="2do inicio"
-                                                    onChange={(event) =>
-                                                      upsertShift(employee.id, date, {
-                                                        secondStart: event.target.value || undefined,
-                                                        templateId: undefined,
-                                                        restDay: false
-                                                      })
-                                                    }
-                                                  />
-                                                  <input
-                                                    type="time"
-                                                    value={shift?.secondEnd ?? ''}
-                                                    placeholder="2do fin"
-                                                    onChange={(event) =>
-                                                      upsertShift(employee.id, date, {
-                                                        secondEnd: event.target.value || undefined,
-                                                        templateId: undefined,
-                                                        restDay: false
-                                                      })
-                                                    }
-                                                  />
-                                                </div>
-                                              )}
-                                              <input
-                                                type="number"
-                                                min={0}
-                                                placeholder="Break min"
-                                                value={shift?.breakMinutes ?? 60}
-                                                onChange={(event) =>
-                                                  upsertShift(employee.id, date, {
-                                                    breakMinutes: Number(event.target.value),
-                                                    templateId: undefined,
-                                                    restDay: false
-                                                  })
-                                                }
-                                              />
-                                              <label className="row">
-                                                <input
-                                                  type="checkbox"
-                                                  checked={Boolean(shift?.restDay)}
-                                                  onChange={(event) =>
-                                                    upsertShift(employee.id, date, {
-                                                      restDay: event.target.checked,
-                                                      templateId: undefined,
-                                                      startTime: event.target.checked ? undefined : shift?.startTime,
-                                                      endTime: event.target.checked ? undefined : shift?.endTime,
-                                                      secondStart: event.target.checked ? undefined : shift?.secondStart,
-                                                      secondEnd: event.target.checked ? undefined : shift?.secondEnd
-                                                    })
-                                                  }
-                                                />
-                                                Descanso
-                                              </label>
-                                            </div>
+                                            <ShiftEditor key={cellKey} shift={shift || undefined} requiresReview={Boolean(shift && isShiftReviewNeeded(shift))} onSave={(patch) => {
+                                              upsertShift(employee.id, date, { ...patch, overrideBranchId: effectiveBranchId === employee.branchId ? undefined : effectiveBranchId });
+                                              setPendingBranches((prev) => { const next = { ...prev }; delete next[cellKey]; return next; });
+                                              setCustomizingCells((prev) => ({ ...prev, [cellKey]: false }));
+                                              setOpenCell(null);
+                                            }} />
                                           )}
                                         </div>
                                       )}
@@ -1289,8 +1268,14 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
       {activeTab === 'calculo' && (
         <section className="panel grid">
           <h2>4. Cálculo</h2>
+          {hasPendingBranch && <p role="alert">Hay cambios de sede pendientes. Vuelve a Horarios para asignar el turno o cancelar el cambio; después calcula nuevamente.</p>}
+          {duplicates.length > 0 && <div role="alert"><p>Hay turnos duplicados. Exporta una copia local y contacta a soporte; no se borró ningún registro.</p><ul>{duplicates.map((group) => <li key={buildShiftKey(group[0].employeeId, group[0].payPeriodId, group[0].date)}>{group[0].employeeId} — {group[0].date} — IDs: {group.map((shift) => shift.id).join(', ')}</li>)}</ul></div>}
+          {reviewShifts.length > 0 && <div role="alert"><p>Hay turnos pendientes de revisión. No se puede calcular ni exportar hasta definir sus tramos reales en Horarios → Personalizar:</p><ul>{reviewShifts.map((shift) => <li key={shift.id}>
+            {employees.find((employee) => employee.id === shift.employeeId)?.fullName ?? shift.employeeId} — {shift.date}
+            {endsBeyondSelectedPeriod(shift) && <> — El intervalo {formatShiftRange(shift)} termina más allá del cierre del período ({selectedPeriod?.endDate}); cálculo y exportación bloqueados. No se aplicó un reparto ni se modificó el turno.</>}
+          </li>)}</ul><p>Si un turno no aparece en Horarios, revisa los filtros, la sede y las fechas; si falta el empleado, contacta a soporte sin borrar el registro.</p></div>}
           <div className="row">
-            <button className="primary" onClick={runCalculation}>
+            <button className="primary" onClick={runCalculation} disabled={calculationBlocked}>
               Calcular
             </button>
             <button className="subtle" onClick={exportExcel} disabled={!calculationResult}>
@@ -1312,6 +1297,7 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
                     <tr>
                       <th>Empleado</th>
                       <th>Fecha</th>
+                      <th>Sede</th>
                       <th>Turno</th>
                       <th>ORD</th>
                       <th>RN</th>
@@ -1326,14 +1312,11 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
                   </thead>
                   <tbody>
                     {calculationResult.dayBreakdowns.map((item) => (
-                      <tr key={item.breakdown.shiftId}>
+                      <tr key={buildShiftKey(item.employeeId, item.shift.payPeriodId, item.date)}>
                         <td>{item.employeeName}</td>
                         <td>{item.date}</td>
-                        <td>
-                          {item.shift.restDay
-                            ? 'Descanso'
-                            : `${item.shift.startTime ?? '-'} - ${item.shift.endTime ?? '-'}`}
-                        </td>
+                        <td>{branchesMap.get(item.shift.overrideBranchId ?? employees.find((employee) => employee.id === item.employeeId)?.branchId ?? '')?.name ?? '—'}</td>
+                        <td>{formatShiftRange(item.shift)}</td>
                         <td>{fixed2(item.breakdown.ordHours)}</td>
                         <td>{fixed2(item.breakdown.rnHours)}</td>
                         <td>{fixed2(item.breakdown.hedHours)}</td>

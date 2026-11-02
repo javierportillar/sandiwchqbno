@@ -292,7 +292,7 @@ export const seededShifts: Shift[] = [
     date: '2026-01-01',
     startTime: '08:00',
     endTime: '17:00',
-    breakMinutes: 60
+    breakMinutes: 0
   },
   {
     id: 's-2',
@@ -301,7 +301,7 @@ export const seededShifts: Shift[] = [
     date: '2026-01-02',
     startTime: '12:00',
     endTime: '22:00',
-    breakMinutes: 60
+    breakMinutes: 0
   },
   {
     id: 's-3',
@@ -310,7 +310,7 @@ export const seededShifts: Shift[] = [
     date: '2026-01-03',
     startTime: '20:00',
     endTime: '04:00',
-    breakMinutes: 30
+    breakMinutes: 0
   },
   {
     id: 's-4',
@@ -319,6 +319,6 @@ export const seededShifts: Shift[] = [
     date: '2026-01-04',
     startTime: '09:00',
     endTime: '19:00',
-    breakMinutes: 60
+    breakMinutes: 0
   }
 ];

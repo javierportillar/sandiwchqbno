@@ -70,6 +70,7 @@ export interface Shift {
   overrideBranchId?: string;
   restDay?: boolean;
   templateId?: string;
+  templateOriginIds?: string[];
   secondStart?: string;
   secondEnd?: string;
 }

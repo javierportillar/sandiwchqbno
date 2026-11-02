@@ -360,6 +360,16 @@ La aplicación no escribe las claves al abrir: guarda solo al editar. Compara lo
 Si una lectura falla, contiene JSON inválido o tiene una forma superior inesperada, la aplicación bloquea la edición y todas las escrituras automáticas. Ante un fallo de escritura también bloquea la persistencia y advierte que puede haber cambios sin guardar. Las seis claves no son transaccionales: algunas podrían haberse guardado antes del fallo. La comprobación solo valida la forma superior, no el contenido interno: por ejemplo, `multipliers: null` puede provocar fallos al usar la configuración y queda pendiente de validación compatible con datos legacy. La validación anidada y la restauración no están implementadas.
 
 
+### Turnos y revisión de datos anteriores
+
+Los turnos nuevos o guardados explícitamente usan cero minutos de descuento: un partido suma sus dos tramos y excluye el intervalo entre ellos. Las plantillas siguen siendo provisionales. La precarga omite celdas sin plantilla aplicable e informa sede, rol y fecha; no inventa horarios.
+
+Los turnos previos con descuentos positivos, horas inválidas, intervalos incompletos o solapados, fechas fuera del período, o una plantilla partida sin dos tramos requieren revisión antes de calcular o exportar el período. No se convierten automáticamente: en **Horarios → Personalizar**, define y guarda los tramos reales. Si la fecha está fuera del período y la celda no es visible, conserva un respaldo y contacta a soporte antes de cambiarla. Un turno de un solo tramo puede terminar al día siguiente si su hora de fin es anterior a la de inicio. En partidos, se admiten tramos ordenados dentro del mismo día y `00:00` como final del último; otros cruces de medianoche son ambiguos sin fecha por tramo y quedan bloqueados para revisión con soporte. Al personalizar se conserva el identificador de plantilla anterior como procedencia.
+
+Un cambio de sede en borrador bloquea cálculo y exportación del período hasta asignar un turno o cancelarlo; luego es necesario calcular nuevamente. Los duplicados por empleado, período y fecha bloquean la liquidación y se muestran con sus IDs, sin edición ni borrado automático: exporta una copia local y contacta a soporte. No se certifican horas históricas ni nómina.
+
+Si cualquier intervalo termina después del último día del período seleccionado, el cálculo y la exportación a Excel quedan bloqueados: no hay una política de asignación aprobada para repartir esas horas entre períodos. El turno se conserva sin cambios.
+
 ### Copia local (solo exportación)
 
 En **Configuración → Exportar copia local (JSON)**, o desde la pantalla de error de almacenamiento, se puede solicitar una descarga local. El archivo versionado contiene la fecha UTC y los valores crudos de las seis claves, incluidos valores corruptos y claves ausentes; no incluye otras claves ni envía datos por red. Si no se puede leer alguna clave, se cancela la exportación completa.

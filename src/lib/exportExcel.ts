@@ -17,14 +17,16 @@ const HOURS_COLUMNS = [
 export const getExportBranchId = (employee: Employee, shift?: Shift): string =>
   shift?.overrideBranchId ?? employee.branchId;
 
-export const exportPayrollExcel = async (params: {
+type ExportPayrollParams = {
   period: PayPeriod;
   employees: Employee[];
   branches: Branch[];
   shifts: Shift[];
   result: CalculationResult;
-}) => {
-  const { period, employees, branches, shifts, result } = params;
+};
+
+export const buildPayrollWorkbook = (params: ExportPayrollParams) => {
+  const { period, employees, branches, result } = params;
   const workbook = new ExcelJS.Workbook();
 
   const branchMap = new Map(branches.map((b) => [b.id, b.name]));
@@ -37,13 +39,15 @@ export const exportPayrollExcel = async (params: {
     'Fecha',
     'Inicio',
     'Salida',
+    'Inicio 2',
+    'Salida 2',
     'Break(min)',
     ...HOURS_COLUMNS
   ]);
 
   for (const row of result.dayBreakdowns) {
     const employee = employeeMap.get(row.employeeId);
-    const shift = shifts.find((s) => s.id === row.shift.id);
+    const shift = row.shift;
     const branchName = employee ? branchMap.get(getExportBranchId(employee, row.shift)) : '-';
 
     detalle.addRow([
@@ -52,6 +56,8 @@ export const exportPayrollExcel = async (params: {
       row.date,
       shift?.startTime ?? '-',
       shift?.endTime ?? '-',
+      shift?.secondStart ?? '-',
+      shift?.secondEnd ?? '-',
       shift?.breakMinutes ?? 0,
       row.breakdown.ordHours,
       row.breakdown.rnHours,
@@ -149,6 +155,12 @@ export const exportPayrollExcel = async (params: {
     });
   });
 
+  return workbook;
+};
+
+export const exportPayrollExcel = async (params: ExportPayrollParams) => {
+  const workbook = buildPayrollWorkbook(params);
+  const { period } = params;
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
