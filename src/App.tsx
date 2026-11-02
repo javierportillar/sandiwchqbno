@@ -19,7 +19,8 @@ import {
   seededPayPeriods,
   seededShifts
 } from './data/seed';
-import { checkSnapshot, fixed2, loadState, pesos, saveState, uid } from './lib/storage';
+import { checkSnapshot, fixed2, loadState, pesos, saveState, STORAGE_KEYS as KEY, uid } from './lib/storage';
+import { LocalBackup } from './components/LocalBackup';
 import type { StorageReadError, StorageSnapshot } from './lib/storage';
 import { aggregateDailyAndPeriod, calculateShiftTotals } from './lib/calculation';
 import { exportPayrollExcel } from './lib/exportExcel';
@@ -57,15 +58,6 @@ const LABEL_BY_KEY: Record<keyof HourTotals, string> = {
   RN_DOM: 'RN DOMIN',
   HED_DOM: 'HED DOMIN',
   HEN_DOM: 'HEN DOMIN'
-};
-
-const KEY = {
-  branches: 'qbano-branches',
-  employees: 'qbano-employees',
-  periods: 'qbano-periods',
-  shifts: 'qbano-shifts',
-  settings: 'qbano-settings',
-  adjustments: 'qbano-adjustments'
 };
 
 const toISO = (date: Date) => {
@@ -286,6 +278,7 @@ function App() {
             <p>La edición y las escrituras automáticas están bloqueadas. No borres los datos del navegador; contacta a soporte para revisar la situación.</p>
             {runtimeError && <p>No recargues ni cierres esta página: podría haber cambios que solo están en memoria.</p>}
           </section>
+          <section className="panel"><LocalBackup /></section>
         </main>
       )}
       {initial?.ok && <div hidden={!!runtimeError}><AppContent initial={initial.data} persist={persist} /></div>}
@@ -1447,6 +1440,7 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
       {activeTab === 'configuracion' && (
         <section className="panel grid">
           <h2>5. Configuración</h2>
+          <LocalBackup />
           <div className="grid grid-2">
             <label>
               Inicio nocturno

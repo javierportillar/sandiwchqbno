@@ -357,7 +357,14 @@ Todo vive en `src/types/payroll.ts` y se persiste como JSON en `localStorage`. L
 
 La aplicación no escribe las claves al abrir: guarda solo al editar. Compara los valores originales de las seis claves antes de habilitar la edición y antes de cada escritura; también bloquea la sesión al recibir un evento de cambio externo relevante. Si detecta un cambio, preserva el valor externo y avisa al usuario. Esta comparación no es atómica con la escritura: `localStorage` no tiene compare-and-swap, por lo que otra pestaña aún podría escribir entre ambas operaciones. No es una coordinación completa entre pestañas.
 
-Si una lectura falla, contiene JSON inválido o tiene una forma superior inesperada, la aplicación bloquea la edición y todas las escrituras automáticas. Ante un fallo de escritura también bloquea la persistencia y advierte que puede haber cambios sin guardar. Las seis claves no son transaccionales: algunas podrían haberse guardado antes del fallo. La comprobación solo valida la forma superior, no el contenido interno: por ejemplo, `multipliers: null` puede provocar fallos al usar la configuración y queda pendiente de validación compatible con datos legacy. Esta unidad no implementa copia de seguridad ni restauración.
+Si una lectura falla, contiene JSON inválido o tiene una forma superior inesperada, la aplicación bloquea la edición y todas las escrituras automáticas. Ante un fallo de escritura también bloquea la persistencia y advierte que puede haber cambios sin guardar. Las seis claves no son transaccionales: algunas podrían haberse guardado antes del fallo. La comprobación solo valida la forma superior, no el contenido interno: por ejemplo, `multipliers: null` puede provocar fallos al usar la configuración y queda pendiente de validación compatible con datos legacy. La validación anidada y la restauración no están implementadas.
+
+
+### Copia local (solo exportación)
+
+En **Configuración → Exportar copia local (JSON)**, o desde la pantalla de error de almacenamiento, se puede solicitar una descarga local. El archivo versionado contiene la fecha UTC y los valores crudos de las seis claves, incluidos valores corruptos y claves ausentes; no incluye otras claves ni envía datos por red. Si no se puede leer alguna clave, se cancela la exportación completa.
+
+**El archivo no está cifrado** y puede contener datos personales y salarios: guardarlo en un lugar seguro. Solo contiene datos persistidos; los cambios que estén únicamente en memoria pueden faltar. Las lecturas no son transaccionales entre pestañas. La app solicita la descarga, pero el navegador determina si la guarda; verifica el archivo. No se ha implementado importación ni restauración.
 
 ---
 

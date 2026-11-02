@@ -1,3 +1,12 @@
+export const STORAGE_KEYS = {
+  branches: 'qbano-branches',
+  employees: 'qbano-employees',
+  periods: 'qbano-periods',
+  shifts: 'qbano-shifts',
+  settings: 'qbano-settings',
+  adjustments: 'qbano-adjustments'
+};
+
 export type StorageReadError = 'unavailable' | 'invalid-json' | 'invalid-shape';
 export type StorageReadResult<T> =
   | { ok: true; value: T; source: 'stored' | 'absent'; raw: string | null }
