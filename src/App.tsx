@@ -1183,6 +1183,10 @@ function AppContent({ initial, persist, backupCallbacks }: {
               <WeekSchedule
                 schedules={weekSchedules}
                 branches={branches}
+                periods={periods}
+                shifts={shifts}
+                week={selectedWeek}
+                branchFilter={branchFilter}
                 collapsedBranches={collapsedBranches}
                 onToggleBranch={(branchId) => setCollapsedBranches((previous) => {
                   const next = new Set(previous);

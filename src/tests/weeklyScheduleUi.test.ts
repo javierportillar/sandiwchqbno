@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
 import { createElement, StrictMode } from 'react';
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { saveAs } from 'file-saver';
+import ExcelJS from 'exceljs';
 import App from '../App';
 import { defaultSettings, seededBranches, seededEmployees } from '../data/seed';
 import type { Employee, Shift } from '../types/payroll';
+
+vi.mock('file-saver', () => ({ saveAs: vi.fn() }));
 
 const employee: Employee = { ...seededEmployees[0], id: 'week-employee', fullName: 'Test Employee', role: 'sala' };
 const firstHalf = { id: 'p1', companyId: 'company-qbano', startDate: '2026-01-01', endDate: '2026-01-15', label: 'Primera quincena' };
@@ -17,10 +21,10 @@ function makeShift(id: string, date: string, payPeriodId: string, patch: Partial
   };
 }
 
-function setup(shifts: Shift[], periods = [firstHalf, secondHalf]) {
+function setup(shifts: Shift[], periods = [firstHalf, secondHalf], employees: readonly Employee[] = [employee]) {
   const data = new Map(Object.entries({
     'qbano-branches': JSON.stringify(seededBranches),
-    'qbano-employees': JSON.stringify([employee]),
+    'qbano-employees': JSON.stringify(employees),
     'qbano-periods': JSON.stringify(periods),
     'qbano-shifts': JSON.stringify(shifts),
     'qbano-settings': JSON.stringify(defaultSettings),
@@ -29,6 +33,18 @@ function setup(shifts: Shift[], periods = [firstHalf, secondHalf]) {
   const setItem = vi.fn((key: string, value: string) => { data.set(key, value); });
   vi.stubGlobal('localStorage', { getItem: (key: string) => data.get(key) ?? null, setItem });
   return { data, setItem };
+}
+
+function readArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (reader.result instanceof ArrayBuffer) resolve(reader.result);
+      else reject(new TypeError('Expected an ArrayBuffer from the downloaded workbook.'));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error('Unable to read the exported workbook.'));
+    reader.readAsArrayBuffer(blob);
+  });
 }
 
 async function mount() {
@@ -42,7 +58,7 @@ function openWeekSchedule() {
   fireEvent.click(screen.getByRole('button', { name: 'Horarios' }));
 }
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.mocked(saveAs).mockReset(); vi.unstubAllGlobals(); });
 
 describe('week-first schedule interface', () => {
   it('shows F3 assigned hours from both quincenas in one week', async () => {
@@ -166,5 +182,73 @@ describe('week-first schedule interface', () => {
     fireEvent.click(branchToggle);
     expect(branchToggle.getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByRole('heading', { name: 'Test Employee' })).toBeNull();
+  });
+
+  it('exports the displayed week and announces a successful download request', async () => {
+    setup([makeShift('export-shift', '2026-01-15', firstHalf.id)]);
+    await mount();
+    openWeekSchedule();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Exportar horario semanal a Excel' }));
+
+    expect(await screen.findByText(/Se solicitó la descarga del borrador semanal/)).toBeTruthy();
+    await waitFor(() => expect(saveAs).toHaveBeenCalledOnce());
+    expect(vi.mocked(saveAs).mock.calls[0][1]).toBe('horario-semanal-2026-01-12-a-2026-01-18.xlsx');
+  });
+
+  it('announces a retryable accessible failure when the browser download API throws', async () => {
+    vi.mocked(saveAs).mockImplementationOnce(() => { throw new Error('Browser download rejected'); });
+    setup([makeShift('export-failure-shift', '2026-01-15', firstHalf.id)]);
+    await mount();
+    openWeekSchedule();
+
+    const exportButton = screen.getByRole('button', { name: 'Exportar horario semanal a Excel' });
+    fireEvent.click(exportButton);
+
+    expect((await screen.findByRole('alert')).textContent).toContain('No se pudo exportar el horario semanal');
+    expect((exportButton as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(exportButton);
+    expect(await screen.findByText(/Se solicitó la descarga del borrador semanal/)).toBeTruthy();
+  });
+
+  it('exports employees in the active home-branch filter even when that group is collapsed', async () => {
+    const homeEmployee: Employee = { ...employee, branchId: 'branch-avenida', active: true };
+    const collapsedCoworker: Employee = {
+      ...homeEmployee, id: 'collapsed-coworker', fullName: 'Collapsed Coworker'
+    };
+    const otherBranchEmployee: Employee = {
+      ...homeEmployee, id: 'other-branch-employee', fullName: 'Other Branch Employee', branchId: 'branch-unicentro'
+    };
+    setup(
+      [makeShift('scope-anchor', '2026-01-15', firstHalf.id)],
+      [firstHalf, secondHalf],
+      [homeEmployee, collapsedCoworker, otherBranchEmployee]
+    );
+    await mount();
+    openWeekSchedule();
+
+    fireEvent.change(screen.getByLabelText('Filtrar sede'), { target: { value: 'branch-avenida' } });
+    const branchToggle = screen.getByRole('button', { name: /2 empleados/ });
+    expect(screen.getByRole('heading', { name: 'Test Employee' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Collapsed Coworker' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Other Branch Employee' })).toBeNull();
+    fireEvent.click(branchToggle);
+    expect(branchToggle.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('heading', { name: 'Test Employee' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Collapsed Coworker' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Exportar horario semanal a Excel' }));
+    expect(await screen.findByText(/Se solicitó la descarga del borrador semanal/)).toBeTruthy();
+    await waitFor(() => expect(saveAs).toHaveBeenCalledOnce());
+    const blob = vi.mocked(saveAs).mock.calls[0][0] as Blob;
+    const restored = new ExcelJS.Workbook();
+    await restored.xlsx.load(await readArrayBuffer(blob));
+
+    const summary = restored.getWorksheet('Resumen semanal')!;
+    expect(summary.getCell('B4').value).toContain('2');
+    expect([summary.getCell('A9').value, summary.getCell('A10').value]).toEqual([
+      'Test Employee', 'Collapsed Coworker'
+    ]);
+    expect([summary.getCell('A9').value, summary.getCell('A10').value]).not.toContain('Other Branch Employee');
   });
 });

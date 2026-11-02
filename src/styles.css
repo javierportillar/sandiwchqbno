@@ -648,6 +648,44 @@ small.muted {
   flex-basis: 100%;
 }
 
+.week-schedule-export-actions {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+.week-schedule-export-button {
+  color: #18304b;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.week-schedule-export-button:focus-visible {
+  outline: 3px solid #e3a008;
+  outline-offset: 3px;
+}
+
+.week-schedule-export-button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.week-schedule-export-status {
+  margin: -8px 0 0;
+  padding: 10px 12px;
+  border: 1px solid #bfd8c5;
+  border-radius: 8px;
+  background: #f1faf3;
+  color: #245c36;
+  font-size: 0.9rem;
+}
+
+.week-schedule-export-status.error {
+  border-color: #e5b9b4;
+  background: #fff5f3;
+  color: #8c2e22;
+}
+
 .week-branch-group {
   min-width: 0;
   padding: 12px;

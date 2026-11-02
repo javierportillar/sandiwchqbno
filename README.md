@@ -241,6 +241,12 @@ Cada empleado muestra **Horas asignadas**, estados de cobertura y avisos de revi
 
 La vista **Quincena y pincel** conserva la grilla, los filtros por sede, el colapso por sede, la asignación por pincel y la sesión de deshacer. La grilla quincenal se refluye en tarjetas de fecha a cualquier ancho, sin exigir desplazamiento horizontal. Ambas vistas son locales y persisten en `localStorage`; no agregan autenticación, base de datos ni cambios a nómina.
 
+### 4.6 · Exportar horario semanal (F5)
+
+En la vista **Semana**, **Exportar semana (.xlsx)** descarga un borrador con dos hojas: un resumen por empleado y un detalle con una fila por empleado y cada uno de los siete días. El archivo conserva el rango lunes-domingo, el filtro de sede habitual aplicado, las sedes habitual/efectiva y sobrescrita, el período de pago, los dos tramos, los estados y todos los avisos. También incluye fechas y duraciones como valores de Excel, con las horas en formato `[h]:mm`.
+
+El resumen incluye a todos los empleados de la semana que cumplen el filtro activo de sede habitual; colapsar un grupo solo cambia la presentación y no excluye sus empleados. El detalle no omite días sin asignar, libres, con período faltante/superpuesto ni turnos que requieren revisión. El archivo permanece marcado como borrador y conserva la advertencia de plantillas provisionales. Las horas son programación bruta calculada por F3: no son horas trabajadas ni de nómina/liquidación, no descuentan pausas y no aplican factores ni límites legales. Exportar no modifica datos. Esta descarga es independiente del exportador de nómina quincenal.
+
 ---
 
 ## 5 · Estado del proyecto
@@ -254,6 +260,7 @@ La verificación manual end-to-end de la UI (Dashboard → Horarios → Cálculo
 | Motor de cálculo `splitShiftIntoSegments` + `classifySegments` + `applyOrdinaryVsExtra` | ✅ Estable | `nocturnalStart` corregido a 19:00 en Fase 0.2. |
 | Persistencia `localStorage` | ✅ Estable | `qbano-*` keys en `src/lib/storage.ts`. |
 | Exportación Excel `.xlsx` (Detalle, Resumen, Horas Extras) | ✅ Estable | `src/lib/exportExcel.ts`. |
+| Exportación de horario semanal `.xlsx` (Resumen semanal, Detalle diario) | ✅ Implementada | F5: `src/lib/exportWeeklySchedule.ts`; mantiene visible el alcance y los avisos del borrador. |
 | Seed con 3 sedes reales (Avenida, Unicentro, Único) | ✅ Completa | Fase 0.1 cerrada. |
 | Modelo `ShiftTemplate` + rol de empleado | ✅ Completa | F1.4a (`9a8679a`) + F1.4b (`85fc267`→`2274644`). 18 plantillas por sede/rol/dayScope. |
 | Motor de dos tramos para turno partido | ✅ Completa | `secondStart`/`secondEnd` explícitos como ruta primaria (`3e7a7ff`). Heurístico legacy como fallback. |

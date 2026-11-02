@@ -1,5 +1,7 @@
-import type { Branch } from '../types/payroll';
+import { useEffect, useState } from 'react';
+import type { Branch, PayPeriod, Shift } from '../types/payroll';
 import type { EmployeeWeekSchedule } from '../lib/scheduleWeek';
+import { exportWeeklySchedule } from '../lib/exportWeeklySchedule';
 import { EmployeeWeekCard, type EmployeeWeekActions } from './EmployeeWeekCard';
 
 function branchSuffix(branchId: string): string {
@@ -12,6 +14,10 @@ function branchSuffix(branchId: string): string {
 export function WeekSchedule({
   schedules,
   branches,
+  periods,
+  shifts,
+  week,
+  branchFilter,
   collapsedBranches,
   onToggleBranch,
   openCell,
@@ -21,6 +27,10 @@ export function WeekSchedule({
 }: {
   schedules: readonly EmployeeWeekSchedule[];
   branches: readonly Branch[];
+  periods: readonly PayPeriod[];
+  shifts: readonly Shift[];
+  week: { startDate: string; endDateExclusive: string };
+  branchFilter: string;
   collapsedBranches: ReadonlySet<string>;
   onToggleBranch: (branchId: string) => void;
   openCell: string | null;
@@ -28,10 +38,36 @@ export function WeekSchedule({
   pendingBranches: Readonly<Record<string, string>>;
   actions: EmployeeWeekActions;
 }) {
+  const [exporting, setExporting] = useState(false);
+  const [exportStatus, setExportStatus] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
   const incomplete = schedules.filter((item) => item.calculation.coverageStatus !== 'confirmed').length;
   const needingReview = schedules.filter((item) => item.issues.some((issue) =>
     issue.code !== 'unassigned_day_state' && issue.code !== 'missing_day_state'
   )).length;
+
+  useEffect(() => {
+    setExportStatus(null);
+  }, [week.startDate, week.endDateExclusive, branchFilter, schedules]);
+
+  const exportWeek = async () => {
+    if (exporting) return;
+    setExporting(true);
+    setExportStatus(null);
+    try {
+      await exportWeeklySchedule({ week, schedules, branches, periods, shifts, branchFilter });
+      setExportStatus({
+        kind: 'success',
+        message: 'Se solicitó la descarga del borrador semanal. Revisá la descarga en tu navegador.'
+      });
+    } catch {
+      setExportStatus({
+        kind: 'error',
+        message: 'No se pudo exportar el horario semanal. Revisá el navegador y volvé a intentar.'
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div className="week-schedule">
@@ -43,7 +79,23 @@ export function WeekSchedule({
             : `Cobertura incompleta en ${incomplete} empleado(s)`}</strong>
         {needingReview > 0 && <span>{needingReview} empleado(s) tienen datos que requieren revisión.</span>}
         <small>Las horas asignadas son una suma de tramos programados; no son horas trabajadas ni pagadas.</small>
+        <div className="week-schedule-export-actions">
+          <button
+            className="subtle week-schedule-export-button"
+            type="button"
+            aria-label="Exportar horario semanal a Excel"
+            onClick={() => void exportWeek()}
+            disabled={exporting}
+          >
+            {exporting ? 'Preparando archivo…' : 'Exportar semana (.xlsx)'}
+          </button>
+        </div>
       </div>
+      {exportStatus && (
+        <p className={`week-schedule-export-status ${exportStatus.kind}`} role={exportStatus.kind === 'error' ? 'alert' : 'status'}>
+          {exportStatus.message}
+        </p>
+      )}
 
       {schedules.length === 0 && <p className="muted">No hay empleados para mostrar con este filtro.</p>}
 
