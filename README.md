@@ -206,7 +206,7 @@ El desglose corresponde a lunes a jueves. En domingo, el motor clasifica las hor
 
 ### 4.4 · Horas programadas semanales (F3)
 
-`src/lib/weeklySchedule.ts` ofrece un cálculo puro e inmutable de minutos programados, independiente del motor de nómina. No clasifica conceptos, calcula dinero, aplica multiplicadores ni compara contra límites legales. La integración con la interfaz queda para F4.
+`src/lib/weeklySchedule.ts` ofrece un cálculo puro e inmutable de minutos programados, independiente del motor de nómina. La vista semanal de F4 consume este cálculo para mostrar **horas asignadas**; no clasifica conceptos, calcula dinero, aplica multiplicadores ni compara contra límites legales.
 
 ```ts
 import { calculateWeeklyScheduledMinutes } from './src/lib/weeklySchedule';
@@ -233,6 +233,14 @@ const result = calculateWeeklyScheduledMinutes({
 | Minutes | `assignedMinutes` and seven `byDate` totals are gross scheduled minutes, clipped to the week. Breaks are never deducted; positive or malformed legacy `breakMinutes` values create review issues. Overlaps and duplicates are reported, set `needsReview`, and count only once via interval union. Each issue has a code, message, shift IDs (when applicable), and date (when known). |
 | Day coverage | Without `dayStates`, coverage is `unknown`; blank dates are not assumed to be days off. Coverage is `confirmed` only with exactly one valid `scheduled` or `day-off` state for each date and no state/work inconsistency. Missing, duplicate, invalid, unassigned, or inconsistent states make it `incomplete`. |
 
+### 4.5 · Planeación semanal (F4)
+
+**Horarios** abre una semana explícita de siete días civiles, con navegación anterior/siguiente y un rango exacto. La semana inicial busca datos existentes antes de usar una semana vacía. Para cada fecha se exige exactamente un período de pago; las fechas sin período o con períodos superpuestos quedan visibles pero no asignables. Los cambios guardan el `payPeriodId` resuelto para esa fecha, incluso al cruzar del 15 al 16.
+
+Cada empleado muestra **Horas asignadas**, estados de cobertura y avisos de revisión. “Sin asignar” permanece incompleto; “Día libre” solo aparece tras una acción explícita y se guarda como `restDay: true`, sin horas ni descuento. Las pausas no se descuentan. La edición personalizada conserva los tramos y propiedades legacy; turnos ambiguos, duplicados, desfasados de período o que cruzan el cierre no se adivinan ni se sobrescriben sin revisión.
+
+La vista **Quincena y pincel** conserva la grilla, los filtros por sede, el colapso por sede, la asignación por pincel y la sesión de deshacer. La grilla quincenal se refluye en tarjetas de fecha a cualquier ancho, sin exigir desplazamiento horizontal. Ambas vistas son locales y persisten en `localStorage`; no agregan autenticación, base de datos ni cambios a nómina.
+
 ---
 
 ## 5 · Estado del proyecto
@@ -254,6 +262,7 @@ La verificación manual end-to-end de la UI (Dashboard → Horarios → Cálculo
 | Selector de rol en Empleados | ✅ Completa | Fase 2.3 (`bc1ad36`). Sala / Domicilio en Avenida. |
 | Paleta por sede + franja + leyenda | ✅ Completa | F3.1 (`2508d1c`) + F3.2 (`9a406ba`). |
 | Vista agrupada por sede + modo pincel + override de sede | ✅ Completa | Fase 4 cerrada en `d158bb0`; la validación automatizada de F5 queda completa. |
+| Vista semanal mobile-first con resolución por fecha y horas asignadas F3 | ✅ Completa | F4: siete días civiles, períodos por fecha, estados de cobertura y vista quincenal/pincel secundaria. |
 | Tests de regresión de plantillas y motor (18 casos) | ✅ Completa | Fase 5: 18/18 casos verdes para los desgloses esperados del motor con el seed; no validan clasificación 1:1 contra el PPTX. |
 | Regla "3+ domingos → compensatorio" | ⏳ Roadmap V2 | Fuera de MVP por decisión de PO. |
 
@@ -319,6 +328,7 @@ Rediseño firmado por PO tras uso real. Hallazgo clave del Revisor tras F4.1: la
 | **F4.2a** | Celda-estado. Cada día muestra UN chip compacto con el turno asignado (Partido/Normal/Doblado/Descanso, color del turno) o "—" si vacío. Eliminar los 4 chips siempre-visibles. Clic en un día (sin pincel activo) abre un mini-selector con los 4 turnos + "Personalizar" (horas a mano) + preview del rango y conceptos resueltos. Mejorar el header de sede (fondo suave + nombre en bold). | Dev Frontend | Revisor | Con turnos asignados, la fila de un empleado se lee como su semana. Clic en un día abre el mini-selector; elegir un turno lo asigna y cierra el selector. |
 | **F4.2b** | Pincel + sesión. Barra arriba de la tabla con 4 chips (Partido/Normal/Doblado/Descanso) + "Sin modo" + indicador del modo activo. **Opción A**: con un turno activo, clic en cualquier día lo aplica/sobreescribe (NO abre el mini-selector). Panel "Detalle de la sesión" registra cada asignación con deshacer individual (✕) y "Deshacer todo". Sesión efímera. Eliminar el bloque "Copiar/Pegar turnos" viejo. | Dev Frontend | Revisor | Con "Doblado" activo y clic en 3 días de 2 empleados → 3 asignaciones + 3 entradas en el detalle. ✕ revierte esa celda. Sin pincel, el clic abre el mini-selector de F4.2a. |
 | **F4.3** | Override de sede por día, dentro del mini-selector de F4.2a. Botón "🏢 Cambiar sede" → elegir una de las 3 sedes. Al elegir sede ≠ base, se seta `Shift.overrideBranchId`, se limpia `templateId`, y las plantillas del día + el cálculo usan la sede override. El borde-izquierdo de la fila queda con el color de la sede BASE del empleado; solo un indicador en la celda marca el override. | Dev Frontend | Revisor | Laura (Unicentro) un domingo, override a Único → los turnos ofrecidos pasan a los de Único; el cálculo usa la jornada de Único. Volver a Unicentro limpia el override. |
+| **F4.4** | Navegación semanal mobile-first, horas asignadas por empleado vía F3 y asignación por fecha con período único; conservar la vista quincenal y pincel como modo secundario. | ✅ Implementada | Revisor | Semana exacta de siete fechas, estados distintos para sin asignar/día libre, avisos de revisión y controles accesibles sin scroll horizontal obligatorio. |
 
 ### Fase 5 · Tests de regresión del motor ✅ COMPLETADA
 
@@ -423,9 +433,10 @@ sandwichqbano/
 ├── vite.config.ts
 ├── index.html
 └── src/
-    ├── App.tsx                 ← toda la UI en un componente (MVP)
+    ├── App.tsx                 ← estado y coordinación de casos de uso
     ├── main.tsx                ← entry point React
     ├── styles.css              ← paleta por sede + turno, layout
+    ├── components/             ← editor de turnos y presentación semanal
     ├── vite-env.d.ts
     │
     ├── types/
@@ -435,7 +446,8 @@ sandwichqbano/
     │   └── seed.ts             ← seed con 3 sedes reales + defaultSettings
     │
     ├── lib/
-    │   ├── calculation.ts      ← motor puro
+    │   ├── calculation.ts      ← motor de nómina
+    │   ├── scheduleWeek.ts     ← fechas civiles, período por fecha y adapter F3
     │   ├── exportExcel.ts      ← generación de .xlsx
     │   └── storage.ts          ← loadState / saveState + helpers de formato
     │
@@ -477,7 +489,7 @@ Abre `http://localhost:5173`.
 
 1. **Dashboard**: seleccionar o crear la quincena, filtrar por sede.
 2. **Empleados**: alta/edición, asignar sede y (si es Avenida) rol Sala/Domicilio.
-3. **Horarios**: por cada empleado × día del período, un click sobre el chip de turno.
+3. **Horarios**: semana de siete días con horas asignadas y estados de cobertura; abre **Quincena y pincel** para conservar la grilla y asignar varios días rápidamente.
 4. **Cálculo**: botón "Calcular" → detalle diario + resumen + liquidación.
 5. **Exportar**: descarga `.xlsx` con las 3 hojas.
 

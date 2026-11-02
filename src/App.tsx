@@ -9,7 +9,8 @@ import {
   PayPeriod,
   PayrollSettings,
   Shift,
-  ShiftKind
+  ShiftKind,
+  ShiftTemplate
 } from './types/payroll';
 import {
   defaultSettings,
@@ -24,6 +25,9 @@ import { LocalBackup, LocalRestoreRecovery } from './components/LocalBackup';
 import { readRestoreJournal, RESTORE_JOURNAL_KEY } from './lib/localBackup';
 import type { RestoreJournalRead, RestoreResult } from './lib/localBackup';
 import { ShiftEditor } from './components/ShiftEditor';
+import { WeekNavigator } from './components/WeekNavigator';
+import { WeekSchedule } from './components/WeekSchedule';
+import type { EmployeeWeekActions } from './components/EmployeeWeekCard';
 import { duplicateShiftGroups, endsBeyondPeriodEnd, isEmptyShift, needsShiftReview, normalTemplateForEmployee, templateFields } from './lib/shiftSafety';
 import type { StorageReadError, StorageSnapshot } from './lib/storage';
 import { aggregateDailyAndPeriod, calculateShiftTotals } from './lib/calculation';
@@ -31,6 +35,13 @@ import { exportPayrollExcel } from './lib/exportExcel';
 import { resolveTemplateForDate, listTemplatesForDate } from './lib/templates';
 import { canRestoreAssignment, restoreAssignmentInList } from './lib/brushSession';
 import type { SessionAssignment } from './lib/brushSession';
+import {
+  addDaysToDate,
+  buildEmployeeWeekSchedule,
+  buildScheduleCellKey as buildShiftKey,
+  getInitialScheduleWeekStart
+} from './lib/scheduleWeek';
+import type { EmployeeWeekDay } from './lib/scheduleWeek';
 
 const TABS: Array<{ id: AppTab; label: string }> = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -95,9 +106,6 @@ const dayLabel = (dateISO: string) => {
 };
 
 const buildPeriodLabel = (startDate: string, endDate: string) => `${startDate} a ${endDate}`;
-
-const buildShiftKey = (employeeId: string, periodId: string, date: string) =>
-  JSON.stringify([periodId, employeeId, date]);
 
 const branchClassSuffix = (branchId: string): 'avenida' | 'unicentro' | 'unico' | 'unknown' => {
   if (branchId === 'branch-avenida') return 'avenida';
@@ -411,6 +419,8 @@ function AppContent({ initial, persist, backupCallbacks }: {
   const [adjustmentsByPeriod, setAdjustmentsByPeriod] = useState(initial.adjustments);
 
   const [selectedPeriodId, setSelectedPeriodId] = useState(periods[0]?.id ?? '');
+  const [scheduleView, setScheduleView] = useState<'week' | 'quincena'>('week');
+  const [weekStartDate, setWeekStartDate] = useState(() => getInitialScheduleWeekStart(periods, shifts));
   const [branchFilter, setBranchFilter] = useState<string>('all');
   const [calculation, setCalculation] = useState<{ result: CalculationResult; periodId: string; shifts: Shift[]; employees: Employee[]; settings: PayrollSettings; adjustments: typeof adjustmentsByPeriod } | null>(null);
   const [scheduleNotice, setScheduleNotice] = useState('');
@@ -445,6 +455,23 @@ function AppContent({ initial, persist, backupCallbacks }: {
     () => periods.find((period) => period.id === selectedPeriodId) ?? periods[0],
     [periods, selectedPeriodId]
   );
+
+  const selectedWeek = useMemo(() => ({
+    startDate: weekStartDate,
+    endDateExclusive: addDaysToDate(weekStartDate, 7)
+  }), [weekStartDate]);
+
+  const allEmployeeWeekSchedules = useMemo(() => employees.map((employee) =>
+    buildEmployeeWeekSchedule({ employee, week: selectedWeek, periods, shifts, branches })
+  ), [employees, selectedWeek, periods, shifts, branches]);
+
+  const weekSchedules = useMemo(() => allEmployeeWeekSchedules.filter((schedule) => {
+    const hasScheduleData = schedule.days.some((day) => day.shiftIds.length > 0) ||
+      schedule.issues.some((item) => Boolean(item.shiftIds?.length));
+    const visibleByStatus = schedule.employee.active || hasScheduleData;
+    const visibleByBranch = branchFilter === 'all' || schedule.employee.branchId === branchFilter;
+    return visibleByStatus && visibleByBranch;
+  }), [allEmployeeWeekSchedules, branchFilter]);
 
   const periodDates = useMemo(() => {
     if (!selectedPeriod) {
@@ -531,19 +558,16 @@ function AppContent({ initial, persist, backupCallbacks }: {
     setCalculation({ result, periodId: selectedPeriod.id, shifts, employees, settings, adjustments: adjustmentsByPeriod });
   };
 
-  const upsertShift = (employeeId: string, date: string, patch: Partial<Shift>): Shift | undefined => {
-    if (!selectedPeriod) {
-      return undefined;
-    }
-    const key = buildShiftKey(employeeId, selectedPeriod.id, date);
-    if (duplicateKeys.has(key)) return undefined;
+  const upsertShiftForPeriod = (employeeId: string, periodId: string, date: string, patch: Partial<Shift>): Shift | undefined => {
+    const key = buildShiftKey(employeeId, periodId, date);
+    if (shifts.filter((item) => buildShiftKey(item.employeeId, item.payPeriodId, item.date) === key).length > 1) return undefined;
     const existing = shiftsByKey.get(key);
 
     const base: Shift =
       existing ?? {
         id: uid('shift'),
         employeeId,
-        payPeriodId: selectedPeriod.id,
+        payPeriodId: periodId,
         date,
         breakMinutes: 0,
         restDay: false
@@ -555,8 +579,101 @@ function AppContent({ initial, persist, backupCallbacks }: {
       const withoutCurrent = prev.filter((item) => buildShiftKey(item.employeeId, item.payPeriodId, item.date) !== key);
       return [...withoutCurrent, next];
     });
+    setCalculation(null);
 
     return next;
+  };
+
+  const upsertShift = (employeeId: string, date: string, patch: Partial<Shift>): Shift | undefined =>
+    selectedPeriod ? upsertShiftForPeriod(employeeId, selectedPeriod.id, date, patch) : undefined;
+
+  const getWeekCellKey = (employee: Employee, day: EmployeeWeekDay): string | undefined =>
+    day.periodResolution.status === 'available'
+      ? buildShiftKey(employee.id, day.periodResolution.period.id, day.date)
+      : undefined;
+
+  const clearWeekDraft = (cellKey: string) => {
+    setPendingBranches((previous) => {
+      const next = { ...previous };
+      delete next[cellKey];
+      return next;
+    });
+  };
+
+  const toggleWeekDay = (employee: Employee, day: EmployeeWeekDay) => {
+    const cellKey = getWeekCellKey(employee, day);
+    if (!cellKey || day.state === 'duplicate' || day.state === 'period-mismatch') return;
+    setOpenCell((previous) => previous === cellKey ? null : cellKey);
+    setCustomizingCells((previous) => ({ ...previous, [cellKey]: false }));
+  };
+
+  const changeWeekBranch = (employee: Employee, day: EmployeeWeekDay, branchId: string) => {
+    const cellKey = getWeekCellKey(employee, day);
+    if (!cellKey || day.state === 'review' || day.state === 'duplicate' || day.state === 'period-mismatch') {
+      setScheduleNotice(`Revisa primero el turno de ${employee.fullName} (${day.date}) antes de cambiar la sede.`);
+      return;
+    }
+    setCalculation(null);
+    setPendingBranches((previous) => ({ ...previous, [cellKey]: branchId }));
+  };
+
+  const cancelWeekBranch = (employee: Employee, day: EmployeeWeekDay) => {
+    const cellKey = getWeekCellKey(employee, day);
+    if (cellKey) clearWeekDraft(cellKey);
+  };
+
+  const saveWeekAssignment = (
+    employee: Employee,
+    day: EmployeeWeekDay,
+    branchId: string,
+    patch: Partial<Shift>,
+    allowReview = false
+  ) => {
+    if (day.periodResolution.status !== 'available') return;
+    if (day.state === 'duplicate' || day.state === 'period-mismatch' || (day.state === 'review' && !allowReview)) {
+      setScheduleNotice(`Revisa el turno de ${employee.fullName} (${day.date}) antes de reemplazarlo.`);
+      return;
+    }
+    const cellKey = buildShiftKey(employee.id, day.periodResolution.period.id, day.date);
+    const saved = upsertShiftForPeriod(employee.id, day.periodResolution.period.id, day.date, {
+      ...patch,
+      overrideBranchId: branchId === employee.branchId ? undefined : branchId
+    });
+    if (!saved) {
+      setScheduleNotice(`No se modificó ${employee.fullName} (${day.date}): hay registros duplicados que requieren revisión.`);
+      return;
+    }
+    clearWeekDraft(cellKey);
+    setOpenCell(null);
+    setCustomizingCells((previous) => ({ ...previous, [cellKey]: false }));
+    setScheduleNotice(`${employee.fullName} · ${day.date}: asignación guardada.`);
+  };
+
+  const assignWeekTemplate = (employee: Employee, day: EmployeeWeekDay, branchId: string, template: ShiftTemplate) => {
+    saveWeekAssignment(employee, day, branchId, templateFields(template));
+  };
+
+  const assignWeekDayOff = (employee: Employee, day: EmployeeWeekDay, branchId: string) => {
+    saveWeekAssignment(employee, day, branchId, {
+      restDay: true,
+      templateId: undefined,
+      startTime: undefined,
+      endTime: undefined,
+      secondStart: undefined,
+      secondEnd: undefined,
+      breakMinutes: 0
+    });
+  };
+
+  const toggleWeekCustom = (employee: Employee, day: EmployeeWeekDay) => {
+    const cellKey = getWeekCellKey(employee, day);
+    if (!cellKey || day.state === 'duplicate' || day.state === 'period-mismatch') return;
+    setOpenCell(cellKey);
+    setCustomizingCells((previous) => ({ ...previous, [cellKey]: !previous[cellKey] }));
+  };
+
+  const saveWeekCustom = (employee: Employee, day: EmployeeWeekDay, branchId: string, patch: Partial<Shift>) => {
+    saveWeekAssignment(employee, day, branchId, patch, true);
   };
 
   const fillDefaultsForPeriod = () => {
@@ -773,6 +890,16 @@ function AppContent({ initial, persist, backupCallbacks }: {
       .map(([label, hours]) => `${label} ${fixed2(Number(hours))}`);
 
     return concepts.join(' · ');
+  };
+
+  const weekActions: EmployeeWeekActions = {
+    onToggleDay: (employee, day) => toggleWeekDay(employee, day),
+    onChangeBranch: (employee, day, _cellKey, branchId) => changeWeekBranch(employee, day, branchId),
+    onCancelBranch: (employee, day) => cancelWeekBranch(employee, day),
+    onAssignTemplate: (employee, day, branchId, template) => assignWeekTemplate(employee, day, branchId, template),
+    onAssignDayOff: (employee, day, branchId) => assignWeekDayOff(employee, day, branchId),
+    onToggleCustom: (employee, day) => toggleWeekCustom(employee, day),
+    onSaveCustom: (employee, day, branchId, patch) => saveWeekCustom(employee, day, branchId, patch)
   };
 
   return (
@@ -1022,6 +1149,55 @@ function AppContent({ initial, persist, backupCallbacks }: {
       {activeTab === 'horarios' && (
         <section className="panel grid">
           <h2>3. Horarios</h2>
+          <div className="schedule-view-toggle" role="group" aria-label="Vista de horarios">
+            <button
+              type="button"
+              aria-pressed={scheduleView === 'week'}
+              className={scheduleView === 'week' ? 'active' : ''}
+              onClick={() => setScheduleView('week')}
+            >
+              Semana
+            </button>
+            <button
+              type="button"
+              aria-pressed={scheduleView === 'quincena'}
+              className={scheduleView === 'quincena' ? 'active' : ''}
+              onClick={() => setScheduleView('quincena')}
+            >
+              Quincena y pincel
+            </button>
+          </div>
+          <label className="schedule-branch-filter">
+            Filtrar sede
+            <select value={branchFilter} onChange={(event) => setBranchFilter(event.target.value)}>
+              <option value="all">Todas las sedes</option>
+              {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+            </select>
+          </label>
+
+          {scheduleView === 'week' ? (
+            <>
+              <WeekNavigator weekStart={weekStartDate} onChange={setWeekStartDate} />
+              {scheduleNotice && <p role="status" className="schedule-notice">{scheduleNotice}</p>}
+              <p className="week-template-note">Las plantillas son provisionales. “Horas asignadas” suma tramos programados sin descontar pausas ni aplicar cálculos de nómina.</p>
+              <WeekSchedule
+                schedules={weekSchedules}
+                branches={branches}
+                collapsedBranches={collapsedBranches}
+                onToggleBranch={(branchId) => setCollapsedBranches((previous) => {
+                  const next = new Set(previous);
+                  if (next.has(branchId)) next.delete(branchId);
+                  else next.add(branchId);
+                  return next;
+                })}
+                openCell={openCell}
+                customizingCells={customizingCells}
+                pendingBranches={pendingBranches}
+                actions={weekActions}
+              />
+            </>
+          ) : (
+            <div className="quincena-schedule">
           <div className="legend">
             <div className="legend-group">
               <span className="legend-label">Sedes</span>
@@ -1114,8 +1290,8 @@ function AppContent({ initial, persist, backupCallbacks }: {
             )}
           </div>
 
-          <div className="table-wrap">
-            <table>
+          <div className="table-wrap quincena-table-wrap">
+            <table className="quincena-table">
               <thead>
                 <tr>
                   <th>Empleado</th>
@@ -1189,7 +1365,7 @@ function AppContent({ initial, persist, backupCallbacks }: {
                                 const cellKey = buildShiftKey(employee.id, selectedPeriod?.id ?? '', date);
                                 if (duplicateKeys.has(cellKey)) {
                                   const group = duplicates.find((items) => buildShiftKey(items[0].employeeId, items[0].payPeriodId, items[0].date) === cellKey)!;
-                                  return <td key={cellKey}><strong>Duplicado</strong><small> IDs: {group.map((item) => item.id).join(', ')}. Exporta copia local y contacta a soporte.</small></td>;
+                                  return <td key={cellKey} data-label={dayLabel(date)} aria-label={`Turnos duplicados para ${employee.fullName}, ${date}`}><strong>Duplicado</strong><small> IDs: {group.map((item) => item.id).join(', ')}. Exporta copia local y contacta a soporte.</small></td>;
                                 }
                                 const effectiveBranchId = pendingBranches[cellKey] ?? getEffectiveBranchId(employee, shift || undefined);
                                 const branch = branchesMap.get(effectiveBranchId);
@@ -1235,7 +1411,7 @@ function AppContent({ initial, persist, backupCallbacks }: {
                                 };
 
                                 return (
-                                  <td key={`${employee.id}-${date}`}>
+                                  <td key={`${employee.id}-${date}`} data-label={dayLabel(date)} aria-label={`Horario de ${employee.fullName}, ${date}`}>
                                     <div
                                       className={`shift-cell cell-state-mode branch-cell-${branchClassSuffix(employee.branchId)}`}
                                     >
@@ -1366,6 +1542,8 @@ function AppContent({ initial, persist, backupCallbacks }: {
               </tbody>
             </table>
           </div>
+            </div>
+          )}
         </section>
       )}
 

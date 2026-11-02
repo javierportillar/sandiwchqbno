@@ -27,7 +27,10 @@ async function mount() {
   });
   await act(async () => { render(createElement(StrictMode, null, createElement(App))); });
 }
-function openSchedule() { fireEvent.click(screen.getByRole('button', { name: 'Horarios' })); }
+function openSchedule() {
+  fireEvent.click(screen.getByRole('button', { name: 'Horarios' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Quincena y pincel' }));
+}
 function menu() { return within(document.querySelector('.mini-selector') as HTMLElement); }
 function enterTimes(start: string, end: string) {
   fireEvent.change(screen.getByLabelText('Inicio del primer tramo'), { target: { value: start } });

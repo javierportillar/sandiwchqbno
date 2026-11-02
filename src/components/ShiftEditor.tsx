@@ -2,7 +2,12 @@ import { useState } from 'react';
 import type { Shift } from '../types/payroll';
 import { validShiftRanges } from '../lib/shiftSafety';
 
-export function ShiftEditor({ shift, requiresReview, onSave }: { shift?: Shift; requiresReview: boolean; onSave: (patch: Partial<Shift>) => void }) {
+export function ShiftEditor({ shift, requiresReview, contextLabel, onSave }: {
+  shift?: Shift;
+  requiresReview: boolean;
+  contextLabel?: string;
+  onSave: (patch: Partial<Shift>) => void;
+}) {
   const ambiguous = requiresReview;
   const [start, setStart] = useState(ambiguous ? '' : shift?.startTime ?? '');
   const [end, setEnd] = useState(ambiguous ? '' : shift?.endTime ?? '');
@@ -27,20 +32,27 @@ export function ShiftEditor({ shift, requiresReview, onSave }: { shift?: Shift; 
       ...(origins.length ? { templateOriginIds: origins } : {}), restDay: false });
   };
 
+  const label = (value: string) => contextLabel ? `${value} — ${contextLabel}` : value;
+
   return (
     <div className="shift-cell customize-mode inline-customize">
       {ambiguous && <p>Revisa el turno anterior: define nuevamente los tramos reales antes de guardar. No se deducirá el intervalo anterior.</p>}
-      <label>Inicio del primer tramo<input type="time" value={start} onChange={(e) => setStart(e.target.value)} /></label>
-      <label>Fin del primer tramo<input type="time" value={end} onChange={(e) => setEnd(e.target.value)} /></label>
-      <label className="row"><input type="checkbox" checked={split} onChange={(e) => setSplit(e.target.checked)} />Agregar segundo tramo</label>
+      <label>{label('Inicio del primer tramo')}<input type="time" value={start} onChange={(e) => setStart(e.target.value)} /></label>
+      <label>{label('Fin del primer tramo')}<input type="time" value={end} onChange={(e) => setEnd(e.target.value)} /></label>
+      <label className="row"><input type="checkbox" checked={split} onChange={(e) => setSplit(e.target.checked)} />{label('Agregar segundo tramo')}</label>
       {split && <>
-        <label>Inicio del segundo tramo<input type="time" value={secondStart} onChange={(e) => setSecondStart(e.target.value)} /></label>
-        <label>Fin del segundo tramo<input type="time" value={secondEnd} onChange={(e) => setSecondEnd(e.target.value)} /></label>
+        <label>{label('Inicio del segundo tramo')}<input type="time" value={secondStart} onChange={(e) => setSecondStart(e.target.value)} /></label>
+        <label>{label('Fin del segundo tramo')}<input type="time" value={secondEnd} onChange={(e) => setSecondEnd(e.target.value)} /></label>
       </>}
       <small>Solo se suman los tramos trabajados; no se descuenta una pausa adicional.</small>
       <small>Si un turno de un solo tramo termina antes de su hora de inicio, se interpreta que termina al día siguiente.</small>
       {error && <p role="alert">{error}</p>}
-      <button type="button" className="primary" onClick={save}>Guardar tramos</button>
+      <button
+        type="button"
+        className="primary"
+        onClick={save}
+        aria-label={contextLabel ? `Guardar tramos para ${contextLabel}` : undefined}
+      >Guardar tramos</button>
     </div>
   );
 }
