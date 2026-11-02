@@ -204,6 +204,35 @@ El desglose corresponde a lunes a jueves. En domingo, el motor clasifica las hor
 - **Domingo ocasional vs habitual.** El pptx distingue: hasta 2 domingos en el mes = `TARIFA 0,80` sin compensatorio; 3 o más = `TARIFA 0,80` con compensatorio en la semana. El MVP calcula el `TARIFA 0,80` correctamente pero **no genera el compensatorio automático**. Queda como V2.
 - **Cambio de cierre por evento**. Si la sede ajusta cierre por temporada o evento, el operador usa el botón "Personalizar" de la celda y entra horas a mano.
 
+### 4.4 · Horas programadas semanales (F3)
+
+`src/lib/weeklySchedule.ts` ofrece un cálculo puro e inmutable de minutos programados, independiente del motor de nómina. No clasifica conceptos, calcula dinero, aplica multiplicadores ni compara contra límites legales. La integración con la interfaz queda para F4.
+
+```ts
+import { calculateWeeklyScheduledMinutes } from './src/lib/weeklySchedule';
+
+const result = calculateWeeklyScheduledMinutes({
+  employeeId: 'employee-1',
+  week: { startDate: '2026-01-05', endDateExclusive: '2026-01-12' },
+  shifts: [{
+    id: 'shift-1', employeeId: 'employee-1', payPeriodId: 'period-a',
+    date: '2026-01-05', startTime: '09:15', endTime: '12:00', breakMinutes: 0
+  }]
+});
+
+// result.assignedMinutes === 165
+// result.byDate[0] === { date: '2026-01-05', scheduledMinutes: 165 }
+// result.coverageStatus === 'unknown' (dayStates was omitted)
+```
+
+| Contract | Behavior |
+|---|---|
+| Week | `startDate` inclusive and `endDateExclusive` exclusive; both must be strict, valid `YYYY-MM-DD` dates exactly seven civil days apart. Civil arithmetic uses UTC ordinals, never the host timezone. Invalid employee IDs or week ranges throw `RangeError`. |
+| Input shifts | Provide all records for the employee that could overlap the week, across every pay period, including overnight shifts starting on the prior date. `payPeriodId` is not an aggregation filter. |
+| Intervals | Strict `HH:mm` times are anchored to `shift.date`. An end earlier than its start is on the next date; equal times are invalid. A split interval is independent, and the gap is not work. Invalid intervals are excluded and reported in `issues`. |
+| Minutes | `assignedMinutes` and seven `byDate` totals are gross scheduled minutes, clipped to the week. Breaks are never deducted; positive or malformed legacy `breakMinutes` values create review issues. Overlaps and duplicates are reported, set `needsReview`, and count only once via interval union. Each issue has a code, message, shift IDs (when applicable), and date (when known). |
+| Day coverage | Without `dayStates`, coverage is `unknown`; blank dates are not assumed to be days off. Coverage is `confirmed` only with exactly one valid `scheduled` or `day-off` state for each date and no state/work inconsistency. Missing, duplicate, invalid, unassigned, or inconsistent states make it `incomplete`. |
+
 ---
 
 ## 5 · Estado del proyecto
