@@ -355,6 +355,10 @@ Todo vive en `src/types/payroll.ts` y se persiste como JSON en `localStorage`. L
 | `qbano-settings` | `PayrollSettings` (nocturnalStart, multipliers, etc.). |
 | `qbano-adjustments` | Diccionario `periodId → employeeId → number` para "ajuste al 100%". |
 
+La aplicación no escribe las claves al abrir: guarda solo al editar. Compara los valores originales de las seis claves antes de habilitar la edición y antes de cada escritura; también bloquea la sesión al recibir un evento de cambio externo relevante. Si detecta un cambio, preserva el valor externo y avisa al usuario. Esta comparación no es atómica con la escritura: `localStorage` no tiene compare-and-swap, por lo que otra pestaña aún podría escribir entre ambas operaciones. No es una coordinación completa entre pestañas.
+
+Si una lectura falla, contiene JSON inválido o tiene una forma superior inesperada, la aplicación bloquea la edición y todas las escrituras automáticas. Ante un fallo de escritura también bloquea la persistencia y advierte que puede haber cambios sin guardar. Las seis claves no son transaccionales: algunas podrían haberse guardado antes del fallo. La comprobación solo valida la forma superior, no el contenido interno: por ejemplo, `multipliers: null` puede provocar fallos al usar la configuración y queda pendiente de validación compatible con datos legacy. Esta unidad no implementa copia de seguridad ni restauración.
+
 ---
 
 ## 9 · Estructura del repositorio

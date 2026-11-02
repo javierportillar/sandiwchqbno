@@ -511,3 +511,10 @@ small.muted {
     padding: 12px;
   }
 }
+
+.storage-error {
+  max-width: 680px;
+  border-left: 6px solid #b42318;
+  display: grid;
+  gap: 12px;
+}

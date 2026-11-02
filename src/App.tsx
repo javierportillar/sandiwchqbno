@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   AppTab,
   Branch,
@@ -19,7 +19,8 @@ import {
   seededPayPeriods,
   seededShifts
 } from './data/seed';
-import { fixed2, loadState, pesos, saveState, uid } from './lib/storage';
+import { checkSnapshot, fixed2, loadState, pesos, saveState, uid } from './lib/storage';
+import type { StorageReadError, StorageSnapshot } from './lib/storage';
 import { aggregateDailyAndPeriod, calculateShiftTotals } from './lib/calculation';
 import { exportPayrollExcel } from './lib/exportExcel';
 import { resolveTemplateForDate, listTemplatesForDate } from './lib/templates';
@@ -152,22 +153,163 @@ const formatShiftRange = (shift: Shift | undefined) => {
   return firstRange;
 };
 
+type StoredData = {
+  branches: Branch[];
+  employees: Employee[];
+  periods: PayPeriod[];
+  shifts: Shift[];
+  settings: PayrollSettings;
+  adjustments: Record<string, Record<string, number>>;
+};
+
+type GateError = StorageReadError | 'changed' | 'write-failed';
+type InitialData = { ok: true; data: StoredData; snapshot: StorageSnapshot } | { ok: false; error: Exclude<GateError, 'write-failed'> };
+
+const readInitialData = (): InitialData => {
+  const branches = loadState(KEY.branches, seededBranches);
+  if (!branches.ok) return branches;
+  const employees = loadState(KEY.employees, seededEmployees);
+  if (!employees.ok) return employees;
+  const periods = loadState(KEY.periods, seededPayPeriods);
+  if (!periods.ok) return periods;
+  const shifts = loadState(KEY.shifts, seededShifts);
+  if (!shifts.ok) return shifts;
+  const settings = loadState(KEY.settings, defaultSettings);
+  if (!settings.ok) return settings;
+  const adjustments = loadState<Record<string, Record<string, number>>>(KEY.adjustments, {});
+  if (!adjustments.ok) return adjustments;
+  return { ok: true, data: {
+    branches: branches.value, employees: employees.value, periods: periods.value,
+    shifts: shifts.value, settings: settings.value, adjustments: adjustments.value
+  }, snapshot: {
+    [KEY.branches]: branches.raw, [KEY.employees]: employees.raw,
+    [KEY.periods]: periods.raw, [KEY.shifts]: shifts.raw,
+    [KEY.settings]: settings.raw, [KEY.adjustments]: adjustments.raw
+  } };
+};
+
 function App() {
+  const [initial, setInitial] = useState<InitialData | null>(null);
+  const [runtimeError, setRuntimeError] = useState<GateError | null>(null);
+  const blocked = useRef(true);
+  const readFailure = useRef<Extract<InitialData, { ok: false }> | null>(null);
+  const firstSnapshot = useRef<StorageSnapshot | null>(null);
+  const expected = useRef<StorageSnapshot | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== null && !Object.values(KEY).includes(event.key)) return;
+      try {
+        if (event.storageArea && event.storageArea !== localStorage) return;
+      } catch {
+        readFailure.current ??= { ok: false, error: 'unavailable' };
+        blocked.current = true;
+        setRuntimeError('unavailable');
+        return;
+      }
+      // Another context changed one of our keys (or cleared the storage area).
+      readFailure.current ??= { ok: false, error: 'changed' };
+      blocked.current = true;
+      setRuntimeError('changed');
+    };
+    window.addEventListener('storage', onStorage);
+    const result = readInitialData();
+    if (!result.ok) {
+      readFailure.current ??= result;
+    } else if (firstSnapshot.current) {
+      if (Object.keys(result.snapshot).some((key) => result.snapshot[key] !== firstSnapshot.current![key])) {
+        readFailure.current ??= { ok: false, error: 'changed' };
+      }
+    } else {
+      firstSnapshot.current = result.snapshot;
+    }
+
+    // StrictMode re-runs mount effects synchronously; retain failures from both.
+    queueMicrotask(() => {
+      if (!active) return;
+      let settled: InitialData = readFailure.current ?? result;
+      if (settled.ok) {
+        const error = checkSnapshot(settled.snapshot);
+        if (error) settled = { ok: false, error };
+      }
+      if (settled.ok) {
+        expected.current = settled.snapshot;
+        blocked.current = false;
+      }
+      setInitial(settled);
+    });
+    return () => { active = false; window.removeEventListener('storage', onStorage); };
+  }, []);
+
+  // Recheck when the content commits, before the browser can paint it.
+  useLayoutEffect(() => {
+    if (!initial?.ok || blocked.current || !expected.current) return;
+    const error = checkSnapshot(expected.current);
+    if (error) {
+      blocked.current = true;
+      setRuntimeError(error);
+    }
+  }, [initial]);
+
+  const persist = useCallback((key: string, value: unknown) => {
+    if (blocked.current || !expected.current) return;
+    const error = checkSnapshot(expected.current);
+    if (error) {
+      blocked.current = true;
+      setRuntimeError(error);
+      return;
+    }
+    const result = saveState(key, value);
+    if (!result.ok) {
+      blocked.current = true;
+      setRuntimeError('write-failed');
+      return;
+    }
+    expected.current[key] = result.raw;
+  }, []);
+
+  const readError = initial && !initial.ok ? initial.error : null;
+  const error = readError ?? runtimeError;
+  return (
+    <>
+      {!initial && <main className="app-shell"><p role="status">Comprobando almacenamiento local…</p></main>}
+      {error && (
+        <main className="app-shell">
+          <section className="panel storage-error" role="alert">
+            <h1>No se puede usar el almacenamiento local</h1>
+            {error === 'invalid-json' && <p>Hay datos locales que no se pueden interpretar.</p>}
+            {error === 'invalid-shape' && <p>Hay datos locales con un formato inesperado.</p>}
+            {error === 'unavailable' && <p>El navegador impidió leer el almacenamiento local.</p>}
+            {error === 'changed' && <p>Los datos locales cambiaron fuera de esta sesión. Se detuvo la edición para evitar sobrescribirlos.</p>}
+            {error === 'write-failed' && <p>El navegador impidió guardar los cambios. No se puede asegurar que se hayan guardado todos.</p>}
+            <p>La edición y las escrituras automáticas están bloqueadas. No borres los datos del navegador; contacta a soporte para revisar la situación.</p>
+            {runtimeError && <p>No recargues ni cierres esta página: podría haber cambios que solo están en memoria.</p>}
+          </section>
+        </main>
+      )}
+      {initial?.ok && <div hidden={!!runtimeError}><AppContent initial={initial.data} persist={persist} /></div>}
+    </>
+  );
+}
+
+function usePersistOnChange(key: string, value: unknown, persist: (key: string, value: unknown) => void) {
+  const previous = useRef(value);
+  useEffect(() => {
+    if (Object.is(previous.current, value)) return;
+    previous.current = value;
+    persist(key, value);
+  }, [key, value, persist]);
+}
+
+function AppContent({ initial, persist }: { initial: StoredData; persist: (key: string, value: unknown) => void }) {
   const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
-  const [branches] = useState<Branch[]>(() => loadState(KEY.branches, seededBranches));
-  const [employees, setEmployees] = useState<Employee[]>(() =>
-    loadState(KEY.employees, seededEmployees)
-  );
-  const [periods, setPeriods] = useState<PayPeriod[]>(() =>
-    loadState(KEY.periods, seededPayPeriods)
-  );
-  const [shifts, setShifts] = useState<Shift[]>(() => loadState(KEY.shifts, seededShifts));
-  const [settings, setSettings] = useState<PayrollSettings>(() =>
-    loadState(KEY.settings, defaultSettings)
-  );
-  const [adjustmentsByPeriod, setAdjustmentsByPeriod] = useState<
-    Record<string, Record<string, number>>
-  >(() => loadState(KEY.adjustments, {}));
+  const [branches] = useState(initial.branches);
+  const [employees, setEmployees] = useState(initial.employees);
+  const [periods, setPeriods] = useState(initial.periods);
+  const [shifts, setShifts] = useState(initial.shifts);
+  const [settings, setSettings] = useState(initial.settings);
+  const [adjustmentsByPeriod, setAdjustmentsByPeriod] = useState(initial.adjustments);
 
   const [selectedPeriodId, setSelectedPeriodId] = useState(periods[0]?.id ?? '');
   const [branchFilter, setBranchFilter] = useState<string>('all');
@@ -192,12 +334,11 @@ function App() {
   const [activeBrush, setActiveBrush] = useState<BrushKind>(null);
   const [sessionAssignments, setSessionAssignments] = useState<SessionAssignment[]>([]);
 
-  useEffect(() => saveState(KEY.branches, branches), [branches]);
-  useEffect(() => saveState(KEY.employees, employees), [employees]);
-  useEffect(() => saveState(KEY.periods, periods), [periods]);
-  useEffect(() => saveState(KEY.shifts, shifts), [shifts]);
-  useEffect(() => saveState(KEY.settings, settings), [settings]);
-  useEffect(() => saveState(KEY.adjustments, adjustmentsByPeriod), [adjustmentsByPeriod]);
+  usePersistOnChange(KEY.employees, employees, persist);
+  usePersistOnChange(KEY.periods, periods, persist);
+  usePersistOnChange(KEY.shifts, shifts, persist);
+  usePersistOnChange(KEY.settings, settings, persist);
+  usePersistOnChange(KEY.adjustments, adjustmentsByPeriod, persist);
 
   const selectedPeriod = useMemo(
     () => periods.find((period) => period.id === selectedPeriodId) ?? periods[0],
