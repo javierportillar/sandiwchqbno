@@ -1,8 +1,8 @@
-# Sándwich Qbano · Nómina Quincenal
+# Sándwich Qbano · Planificación de Jornadas
 
-> **Liquidación de nómina para tres sedes en Cali** — Avenida, Unicentro y Único — con **turnos plantilla predefinidos por sede**, código de color por franja horaria y exportación a Excel. Todo en el navegador, `localStorage`, sin backend. Frontend React 19 + TypeScript + Vite.
+> **Planificador local de jornadas semanales** para las tres sedes configuradas en el prototipo — Avenida, Unicentro y Único — con plantillas provisionales, cálculo de horas programadas y exportación a Excel. Es una aplicación web React/Vite normal, no una PWA: no hay manifest ni service worker. Usa `localStorage`; no tiene backend, base de datos ni autenticación. Incluye un módulo de nómina existente, pero sus reglas e importes no están validados para pagos.
 
-> **Documento vivo del proyecto.** Este README es el plan canónico. Cambia cuando cambia el alcance; se mantiene en sincronía con el tracker de tareas y con el pptx oficial `INVERSIONES CAICEDO BASTIDAS SAS COMPONENTES DE NOMINA.pptx` que define reglas de negocio.
+> **Estado de la fuente de negocio.** La presentación `INVERSIONES CAICEDO BASTIDAS SAS COMPONENTES DE NOMINA.pptx` no está incluida en este repositorio. Las reglas de nómina y los horarios exactos de apertura/cierre no pueden revalidarse desde el código disponible. No uses los importes del módulo para pagos hasta contrastarlos con la fuente y obtener aprobación del responsable de nómina.
 
 ```
                          ┌──────────────────────────────────┐
@@ -11,7 +11,7 @@
                                          │
                                          ▼
                          ┌──────────────────────────────────┐
-                         │      PWA React (Vite build)      │
+                         │   Aplicación web React (Vite)    │
                          │                                  │
                          │  Dashboard · Empleados · Horarios│
                          │  Cálculo · Configuración         │
@@ -31,7 +31,7 @@
 
 1. [Visión](#2--visión)
 2. [Roles operativos](#3--roles-operativos)
-3. [Reglas de negocio desde el pptx](#4--reglas-de-negocio-desde-el-pptx)
+3. [Reglas de nómina pendientes de validación](#4--reglas-de-nómina-pendientes-de-validación)
 4. [Estado del proyecto](#5--estado-del-proyecto)
 5. [Plan MVP por fases](#6--plan-mvp-por-fases)
 6. [Stack tecnológico](#7--stack-tecnológico)
@@ -49,14 +49,14 @@
 |---|---|
 | El operador ingresaba HH:MM entrada/salida en cuatro inputs pequeños por celda, sin pista visual de sede ni de tipo de turno. | Un click sobre un chip **Partido / Normal / Doblado / Descanso**. El sistema selecciona la franja configurada según sede + rol + día de la semana. |
 | Todas las celdas se veían iguales, en escala de grises azul. Para "ubicar rápido a Laura de Unicentro" había que leer subtítulos. | Cada celda tiene **borde de color por sede** y **chip de color por franja de turno**. Se lee la grilla de un vistazo. |
-| El recargo nocturno arrancaba a las **21:00** en la configuración por defecto, cuando el pptx dice **19:00**. Toda la nómina salía con RN subestimado. | El default queda alineado al pptx (`nocturnalStart: '19:00'`), y hay tests de regresión para el comportamiento del motor. |
-| La sede "Panamericana" no existe en el negocio real: era placeholder. | Las tres sedes reales quedan cargadas: **Avenida**, **Unicentro**, **Único**, cada una con su catálogo de turnos plantilla. |
+| El valor por defecto del prototipo pasó históricamente de **21:00** a **19:00** (`nocturnalStart`). | La aplicación usa actualmente `19:00`; la fuente que motivó ese cambio no está disponible aquí, por lo que el valor no queda verificado ni aprobado para pagos. |
+| El seed histórico usaba el nombre "Panamericana" como placeholder. | El prototipo ahora configura los nombres **Avenida**, **Unicentro** y **Único**. Su correspondencia con sedes comerciales no se certifica en este README. |
 
 **Lo que la app NO hace (por diseño del MVP).**
 
-- **No aplica automáticamente la regla de "3+ domingos → compensatorio"** (art. 179/180 CST, descrita en el pptx). Esta regla exige contabilizar domingos por mes calendario cruzando quincenas — queda fuera del MVP y va como roadmap V2.
-- **No tiene backend ni multiusuario**. Todo vive en `localStorage` de un solo navegador. Si el operador cambia de máquina, migra manualmente.
-- **No calcula parafiscales, seguridad social ni retención en la fuente**. Solo liquida conceptos de trabajo suplementario (RN, HED, HEN, DOM, RN_DOM, HED_DOM, HEN_DOM) según la fórmula `Sueldo Básico / 220 × TARIFA × cantidad de horas`.
+- **No aplica un compensatorio automático por conteo mensual de domingos**. Una nota histórica del proyecto menciona ese supuesto, pero la fuente citada no está disponible en el repositorio y la regla no está validada ni implementada.
+- **No tiene backend, base de datos, autenticación ni sincronización multiusuario**. Los datos viven en `localStorage` de este navegador.
+- **El módulo de nómina contiene cálculos para conceptos de trabajo suplementario** (RN, HED, HEN, DOM, RN_DOM, HED_DOM, HEN_DOM) usando la fórmula programada `Sueldo Básico / 220 × TARIFA × cantidad de horas`. Esta descripción es del prototipo, no una aprobación de tarifas o resultados de pago.
 
 ---
 
@@ -66,10 +66,10 @@ El proyecto se opera con un dueño de producto humano y agentes especializados c
 
 | Rol | Quién | Qué hace | Qué NO hace |
 |---|---|---|---|
-| **Product Owner (PO)** | Javier (humano) | Define alcance, valida contra el pptx oficial, decide go/no-go de cada fase, aprueba paleta de colores. | NO escribe código de aplicación. NO toma decisiones de arquitectura autónomas. |
-| **Revisor / Arquitecto** | Agente IA con rol reviewer | Audita post-commit contra las reglas del pptx, valida que cada plantilla de turno arroje los conceptos correctos, GO/NO-GO técnico al cierre de cada fase, dueño de los tests contra el pptx. | NO implementa código sin handoff explícito. NO cambia paleta ni copywriting sin PO. |
-| **Desarrollador Frontend** | Agente IA con rol dev | Implementa tipos, seed, motor de cálculo, celda de horario, chips, CSS custom properties, tests de plantilla. Corre validaciones locales antes de cada commit. | NO cambia reglas de negocio (multiplicadores, franja nocturna, dayScope) sin PO+Revisor. NO renombra sedes ni conceptos. NO se sale del scope del brief sin preguntar. |
-| **QA / Verificador** | Agente IA o el propio PO | Corre `npm test` + prueba manual del flujo Dashboard → Horarios → Cálculo → Exportar, valida el .xlsx contra un caso conocido de nómina de la empresa. | NO firma un GO si algún test contra el pptx queda rojo. NO acepta warnings de TypeScript. |
+| **Product Owner (PO)** | Javier (humano) | Define alcance y decisiones del producto; obtiene validación del responsable de nómina contra una fuente vigente y aprobada cuando exista. | NO escribe código de aplicación. NO toma decisiones de arquitectura autónomas. |
+| **Revisor / Arquitecto** | Agente IA con rol reviewer | Revisa implementación y criterios técnicos; los tests solo protegen comportamiento programado y no certifican tarifas, horarios ni reglas de negocio. | NO implementa código sin handoff explícito. NO declara validación contra una fuente ausente. |
+| **Desarrollador Frontend** | Agente IA con rol dev | Implementa tipos, seed, motor de cálculo, celda de horario, chips, CSS custom properties y tests de regresión. Corre validaciones locales antes de cada commit. | NO cambia parámetros del motor fuera del alcance acordado. Los cambios de nómina deben validarse con el responsable antes de usarse para pagos. NO renombra identificadores sin autorización. |
+| **QA / Verificador** | Agente IA o el propio PO | Corre `npm test` y revisa el flujo Dashboard → Horarios → Cálculo → Exportar. Las comparaciones de importes requieren casos aprobados por el responsable de nómina y una fuente disponible. | NO presenta tests automatizados como certificación de reglas o pagos. NO acepta warnings de TypeScript. |
 
 ### Handoff estándar por fase
 
@@ -80,11 +80,11 @@ Revisor traduce alcance a criterios de aceptación (DoD)
     ↓
 Dev valida local (npm test + build + tsc) · commit directo a main · push
     ↓
-Revisor audita post-commit · verifica DoD · valida contra pptx si aplica
+Revisor audita post-commit · verifica DoD técnico · no certifica reglas de negocio
     ↓
 Si hay scope violation o bug → Revisor pide revert (git revert en main)
     ↓
-QA corre flujo end-to-end · exporta xlsx · valida números
+QA corre flujo end-to-end · exporta xlsx · verifica comportamiento; nómina requiere validación externa
     ↓
 PO firma GO/NO-GO · se avanza a la siguiente fase
 ```
@@ -118,38 +118,38 @@ Cuando cambie, se agrega convención de ramas (`fase-N-nombre`), se abre PR cont
 
 ---
 
-## 4 · Reglas de negocio desde el pptx
+## 4 · Reglas de nómina pendientes de validación
 
-Estas reglas están en `INVERSIONES CAICEDO BASTIDAS SAS COMPONENTES DE NOMINA.pptx` (slides 2 a 5). El documento incluye fórmulas y desgloses genéricos; los ejemplos del motor y sus franjas provisionales no constituyen una validación 1:1 contra el PPTX. Las discrepancias requieren revisión antes de usar los resultados para nómina.
+La presentación de nómina citada arriba no está incluida en los archivos versionados de este repositorio. No se puede afirmar que los valores siguientes coincidan con esa fuente, con una decisión comercial vigente o con la normativa aplicable. La tabla describe únicamente supuestos codificados en el prototipo y requiere validación del responsable de nómina contra una fuente actual y aprobada antes de cualquier pago. El planificador semanal calcula horas **programadas**, sin deducir pausas; no son horas trabajadas ni liquidadas.
 
-### 4.1 · Trabajo suplementario (fórmula general y tarifas)
+### 4.1 · Comportamiento programado del motor de nómina (no validado)
 
-**Fórmula.** `Sueldo Básico / 220 × TARIFA × cantidad de horas`
+**Fórmula implementada en el prototipo.** `Sueldo Básico / 220 × TARIFA × cantidad de horas`. No es una fórmula aprobada para liquidar pagos.
 
-| Concepto | Código | Tarifa (recargo sobre hora ordinaria) | Definición |
-|---|---|---|---|
-| Recargo Nocturno | `RN` | 0,35 | Horas dentro de la jornada ordinaria trabajadas **después de las 7 PM**. |
-| Hora Extra Diurna | `HED` | 0,25 | Horas adicionales a la jornada ordinaria, hasta las 7 PM. |
-| Hora Extra Nocturna | `HEN` | 0,75 | Horas adicionales a la jornada ordinaria, después de las 7 PM. |
-| Dominical Diurno | `DOM_DIURNO` | 0,80 | Trabajo dominical ocasional o habitual (art. 179/180 CST), tramo diurno. |
-| Dominical Nocturno | `DOM_NOCT` | 1,80 | Tramo dominical trabajado después de las 7 PM. |
-| Recargo Nocturno Dominical | `RN_DOM` | 1,15 | 0,35 + 0,80 acumulado. |
-| Hora Extra Diurna Dominical | `HED_DOM` | 2,05 | 1,25 + 0,80 acumulado. |
-| Hora Extra Nocturna Dominical | `HEN_DOM` | 2,55 | 1,75 + 0,80 acumulado. |
+| Concepto | Bucket/campo del resultado | Clave de multiplicador | Factor del prototipo (no validado) | Comportamiento programado (no es regla aprobada) |
+|---|---|---|---|---|
+| Recargo Nocturno | `RN` | `RN` | 0,35 | Concepto que el prototipo asigna después del corte nocturno configurado. |
+| Hora Extra Diurna | `HED` | `HED` | 0,25 | Concepto que el prototipo asigna a horas extra antes del corte configurado. |
+| Hora Extra Nocturna | `HEN` | `HEN` | 0,75 | Concepto que el prototipo asigna a horas extra después del corte configurado. |
+| Dominical Diurno | `DOM08` | `DOM_DIURNO` | 0,80 | El clasificador actual usa el bucket `DOM08` para segmentos dominicales diurnos. |
+| Dominical Nocturno | `DOM18` | `DOM_NOCT` | 1,80 | `DOM18` está disponible como campo de resultado, pero el clasificador actual envía los segmentos dominicales nocturnos a `RN_DOM` o `HEN_DOM`. |
+| Recargo Nocturno Dominical | `RN_DOM` | `RN_DOM` | 1,15 | Factor configurado por el prototipo; aplicación pendiente de validar. |
+| Hora Extra Diurna Dominical | `HED_DOM` | `HED_DOM` | 2,05 | Factor configurado por el prototipo; aplicación pendiente de validar. |
+| Hora Extra Nocturna Dominical | `HEN_DOM` | `HEN_DOM` | 2,55 | Factor configurado por el prototipo; aplicación pendiente de validar. |
 
-> **Nota sobre tarifas y validación de nómina.** El PPTX expresa la hora extra diurna como tarifa total `1,25`. El motor actual calcula `HED` con `0,25` y `HEN` con `0,75`; el subtotal `ORD` es cero y el total mostrado no añade explícitamente el valor base de esas horas. No se ha demostrado la equivalencia con el PPTX ni si algún proceso externo incorpora esa base. Los importes y reglas vigentes requieren validación del responsable de nómina antes de usarse para pagos.
+> **Nota sobre diferencias documentadas históricamente.** Notas antiguas del proyecto comparaban `HED = 0,25` con un total de `1,25` atribuido a la presentación ausente. Esa atribución no puede verificarse. El código actual configura `HED` en `0,25` y deja en cero el importe monetario `ORD`; no se puede inferir de esas notas si otro proceso incorpora el valor base. El responsable de nómina debe revisar la fórmula completa antes de cualquier pago.
 
-> **Jornada ordinaria configurada = 7h/día.** `defaultSettings.dailyOrdinaryHours = 7`. El motor asigna las primeras 7h netas de cada día a los conceptos ordinarios correspondientes y el excedente a extras; en domingo usa conceptos dominicales. Por ejemplo, con las franjas provisionales, Avenida sala DOBLADO y Único DOM-JUE DOBLADO producen los desgloses de las tablas siguientes en un día no domingo. El PPTX incluye desgloses genéricos, pero estos ejemplos del motor no están validados 1:1 contra ellos.
+> **Configuración actual del prototipo: 7h/día.** `defaultSettings.dailyOrdinaryHours = 7`. El motor usa este valor para clasificar el tiempo y generar los resultados que siguen. Es una constante de configuración, no una jornada legal o empresarial aprobada; validar antes de usar importes.
 
 ### 4.2 · Turnos plantilla por sede
 
-Cada empleado se ubica con un chip de turno. Las duraciones netas fueron contrastadas con el PPTX; las franjas exactas de la tabla y del seed son **provisionales y están pendientes de confirmación**. Las pruebas fijan la configuración actual como referencia de regresión, no como certificación de nómina. Los desgloses siguientes describen el motor para esas franjas, no una reproducción validada 1:1 de los desgloses genéricos del PPTX.
+Cada empleado se ubica con un chip de turno. La fuente no está disponible en el repositorio para comprobar estas duraciones. Las franjas de las tablas y del seed son **valores provisionales del prototipo**, no horarios empresariales aprobados. Tampoco están verificadas las horas exactas de apertura o cierre de las sedes. Las pruebas solo fijan comportamiento de regresión del código; no certifican horarios ni reglas de nómina.
 
 #### Avenida — sala (todos los días)
 
 El desglose corresponde a un día no domingo. En domingo, el motor clasifica las horas con conceptos dominicales.
 
-| Turno | Franja | Desglose esperado |
+| Turno | Franja provisional | Resultado actual del prototipo (no validado) |
 |---|---|---|
 | Partido | 11:00-14:00 + 18:00-22:00 | 4 ORD + 3 RN |
 | Normal | 14:00-22:00 | 5 ORD + 2 RN + 1 HEN |
@@ -159,7 +159,7 @@ El desglose corresponde a un día no domingo. En domingo, el motor clasifica las
 
 El desglose corresponde a un día no domingo. En domingo, el motor clasifica las horas con conceptos dominicales.
 
-| Turno | Franja | Desglose esperado |
+| Turno | Franja provisional | Resultado actual del prototipo (no validado) |
 |---|---|---|
 | Partido | 12:00-15:00 + 18:00-22:00 | 4 ORD + 3 RN |
 | Normal | 15:00-22:00 | 4 ORD + 3 RN |
@@ -167,7 +167,7 @@ El desglose corresponde a un día no domingo. En domingo, el motor clasifica las
 
 #### Unicentro — lunes a sábado
 
-| Turno | Franja | Desglose esperado |
+| Turno | Franja provisional | Resultado actual del prototipo (no validado) |
 |---|---|---|
 | Partido | 11:00-14:00 + 18:00-22:00 | 4 ORD + 3 RN |
 | Normal | 14:00-22:00 | 5 ORD + 2 RN + 1 HEN |
@@ -175,7 +175,7 @@ El desglose corresponde a un día no domingo. En domingo, el motor clasifica las
 
 #### Unicentro — domingo
 
-| Turno | Franja | Desglose esperado |
+| Turno | Franja provisional | Resultado actual del prototipo (no validado) |
 |---|---|---|
 | Partido | 10:00-14:00 + 18:00-22:00 | 5 DOM08 + 2 RN_DOM + 1 HEN_DOM |
 | Normal | 14:00-22:00 | 5 DOM08 + 2 RN_DOM + 1 HEN_DOM |
@@ -185,7 +185,7 @@ El desglose corresponde a un día no domingo. En domingo, el motor clasifica las
 
 El desglose corresponde a lunes a jueves. En domingo, el motor clasifica las horas con conceptos dominicales.
 
-| Turno | Franja | Desglose esperado |
+| Turno | Franja provisional | Resultado actual del prototipo (no validado) |
 |---|---|---|
 | Partido | 11:00-14:00 + 18:00-21:00 | 4 ORD + 2 RN |
 | Normal | 14:00-21:00 | 5 ORD + 2 RN |
@@ -193,16 +193,16 @@ El desglose corresponde a lunes a jueves. En domingo, el motor clasifica las hor
 
 #### Único — viernes y sábado
 
-| Turno | Franja | Desglose esperado |
+| Turno | Franja provisional | Resultado actual del prototipo (no validado) |
 |---|---|---|
 | Partido | 11:00-14:00 + 18:00-21:30 | 4 ORD + 2,5 RN |
 | Normal | 14:00-21:30 | 5 ORD + 2 RN + 0,5 HEN |
 | Doblado | 11:00-21:30 | 7 ORD + 1 HED + 2,5 HEN |
 
-### 4.3 · Reglas fuera del MVP
+### 4.3 · Supuestos históricos y pendientes
 
-- **Domingo ocasional vs habitual.** El pptx distingue: hasta 2 domingos en el mes = `TARIFA 0,80` sin compensatorio; 3 o más = `TARIFA 0,80` con compensatorio en la semana. El MVP calcula el `TARIFA 0,80` correctamente pero **no genera el compensatorio automático**. Queda como V2.
-- **Cambio de cierre por evento**. Si la sede ajusta cierre por temporada o evento, el operador usa el botón "Personalizar" de la celda y entra horas a mano.
+- **Conteo mensual de domingos y compensatorio.** Una nota histórica del proyecto menciona un umbral mensual y descanso compensatorio; la fuente de esa afirmación no está disponible y el supuesto no está validado. El prototipo no implementa conteo mensual ni compensatorio automático.
+- **Cambio de horario por evento.** Si el responsable confirma un horario distinto, el operador puede ingresar tramos manualmente con "Personalizar". Esa capacidad de edición no valida el horario ni implica que las franjas actuales sean horarios oficiales.
 
 ### 4.4 · Horas programadas semanales (F3)
 
@@ -237,7 +237,7 @@ const result = calculateWeeklyScheduledMinutes({
 
 **Horarios** abre una semana explícita de siete días civiles, con navegación anterior/siguiente y un rango exacto. La semana inicial busca datos existentes antes de usar una semana vacía. Para cada fecha se exige exactamente un período de pago; las fechas sin período o con períodos superpuestos quedan visibles pero no asignables. Los cambios guardan el `payPeriodId` resuelto para esa fecha, incluso al cruzar del 15 al 16.
 
-Cada empleado muestra **Horas asignadas**, estados de cobertura y avisos de revisión. “Sin asignar” permanece incompleto; “Día libre” solo aparece tras una acción explícita y se guarda como `restDay: true`, sin horas ni descuento. Las pausas no se descuentan. La edición personalizada conserva los tramos y propiedades legacy; turnos ambiguos, duplicados, desfasados de período o que cruzan el cierre no se adivinan ni se sobrescriben sin revisión.
+Cada empleado muestra **Horas asignadas**, estados de cobertura y avisos de revisión. “Sin asignar” permanece incompleto; “Día libre” solo aparece tras una acción explícita y se guarda como `restDay: true`, sin horas ni descuento. En la vista semanal, las pausas no se descuentan de las horas programadas. La edición personalizada conserva los tramos y propiedades legacy; turnos ambiguos, duplicados, desfasados de período o que cruzan el cierre no se adivinan ni se sobrescriben sin revisión.
 
 La vista **Quincena y pincel** conserva la grilla, los filtros por sede, el colapso por sede, la asignación por pincel y la sesión de deshacer. La grilla quincenal se refluye en tarjetas de fecha a cualquier ancho, sin exigir desplazamiento horizontal. Ambas vistas son locales y persisten en `localStorage`; no agregan autenticación, base de datos ni cambios a nómina.
 
@@ -251,27 +251,27 @@ El resumen incluye a todos los empleados de la semana que cumplen el filtro acti
 
 ## 5 · Estado del proyecto
 
-**Estado global del MVP: ✅ COMPLETO** en alcance de código y contrato automatizado.
+**Estado global del prototipo: ✅ COMPLETO** en el alcance técnico implementado y cubierto por pruebas. Esto no significa que la nómina, las tarifas o los horarios estén aprobados para uso operativo.
 
 La verificación manual end-to-end de la UI (Dashboard → Horarios → Cálculo → Exportar) fue ejecutada en navegador local: asignación por mini-selector, modo pincel, cambio de sede, persistencia tras recarga, cálculo y generación del flujo de exportación quedaron ejercitados. La descarga física del archivo no es observable desde el arnés de navegador usado; el contrato de `.xlsx` continúa cubierto por `src/tests/exportExcel.test.ts`.
 
 | Módulo | Estado | Notas |
 |---|---|---|
-| Motor de cálculo `splitShiftIntoSegments` + `classifySegments` + `applyOrdinaryVsExtra` | ✅ Estable | `nocturnalStart` corregido a 19:00 en Fase 0.2. |
+| Motor de cálculo `splitShiftIntoSegments` + `classifySegments` + `applyOrdinaryVsExtra` | ✅ Implementado | El prototipo configura `nocturnalStart` en 19:00; el valor y sus reglas requieren validación de nómina. |
 | Persistencia `localStorage` | ✅ Estable | `qbano-*` keys en `src/lib/storage.ts`. |
 | Exportación Excel `.xlsx` (Detalle, Resumen, Horas Extras) | ✅ Estable | `src/lib/exportExcel.ts`. |
 | Exportación de horario semanal `.xlsx` (Resumen semanal, Detalle diario) | ✅ Implementada | F5: `src/lib/exportWeeklySchedule.ts`; mantiene visible el alcance y los avisos del borrador. |
-| Seed con 3 sedes reales (Avenida, Unicentro, Único) | ✅ Completa | Fase 0.1 cerrada. |
+| Seed con tres nombres de sede (Avenida, Unicentro, Único) | ✅ Completa | Son los valores configurados en el prototipo; su correspondencia comercial no está verificada aquí. |
 | Modelo `ShiftTemplate` + rol de empleado | ✅ Completa | F1.4a (`9a8679a`) + F1.4b (`85fc267`→`2274644`). 18 plantillas por sede/rol/dayScope. |
 | Motor de dos tramos para turno partido | ✅ Completa | `secondStart`/`secondEnd` explícitos como ruta primaria (`3e7a7ff`). Heurístico legacy como fallback. |
-| Clasificación `RN_DOM` para domingo nocturno | ✅ Resuelta | `classifySegments` emite `RN_DOM` en vez de `DOM18` para segmentos dominicales nocturnos. |
+| Clasificación programada `RN_DOM` para domingo nocturno | ✅ Implementada | `classifySegments` emite ese concepto en el código; no certifica una clasificación o tarifa aprobada. |
 | Celda de horario con chips de turno | ✅ Completa | Fase 2. Chips + Personalizar (`bc1ad36` + `4808828`). |
 | Selector de rol en Empleados | ✅ Completa | Fase 2.3 (`bc1ad36`). Sala / Domicilio en Avenida. |
 | Paleta por sede + franja + leyenda | ✅ Completa | F3.1 (`2508d1c`) + F3.2 (`9a406ba`). |
 | Vista agrupada por sede + modo pincel + override de sede | ✅ Completa | Fase 4 cerrada en `d158bb0`; la validación automatizada de F5 queda completa. |
 | Vista semanal mobile-first con resolución por fecha y horas asignadas F3 | ✅ Completa | F4: siete días civiles, períodos por fecha, estados de cobertura y vista quincenal/pincel secundaria. |
-| Tests de regresión de plantillas y motor (18 casos) | ✅ Completa | Fase 5: 18/18 casos verdes para los desgloses esperados del motor con el seed; no validan clasificación 1:1 contra el PPTX. |
-| Regla "3+ domingos → compensatorio" | ⏳ Roadmap V2 | Fuera de MVP por decisión de PO. |
+| Tests de regresión de plantillas y motor (18 casos históricos) | ✅ Completos | Cubren los resultados programados para el seed; no certifican horarios, tarifas, reglas legales ni liquidaciones. |
+| Conteo mensual de domingos y compensatorio | ⏳ Pendiente | Referencia histórica no verificada; requiere definición y aprobación antes de implementarse. |
 
 ---
 
@@ -284,7 +284,7 @@ Cada tarea tiene **ID** (usar en commits), **rol responsable**, **rol revisor** 
 | ID | Tarea | Estado |
 |---|---|---|
 | **F0.1** | Renombrar sede `Panamericana` → `Avenida`. | ✅ Commit `5696df3` |
-| **F0.2** | Corregir `defaultSettings.nocturnalStart` de `'21:00'` a `'19:00'`. | ✅ Commit `8139782` |
+| **F0.2** | Cambiar el valor del prototipo `defaultSettings.nocturnalStart` de `'21:00'` a `'19:00'` (sin validar la regla de nómina). | ✅ Commit `8139782` |
 
 ### Fase 1 · Modelo de datos: plantillas de turno + rol 🟡 ACEPTADA PARCIAL
 
@@ -294,7 +294,7 @@ Aceptación de PO 2026-07-02 con Opción B: no se hace revert, se completa en Fa
 |---|---|---|---|
 | **F1.1** | Extender tipos con ShiftTemplate/DayScope/EmployeeRole/etc. | 🟡 Parcial (`1a6a61a`) | Solo se agregó `Shift.templateId?`. Faltantes → F1.4a. |
 | **F1.2** | Poblar `seededBranches` con 6 combinaciones dayScope × sede × rol. | 🟡 Mal dirigida (`645fb78`) | Se agregaron 3 templates globales huérfanos. Refactor por sede → F1.4b. |
-| **F1.3** | Extender `splitShiftIntoSegments` para consumir `secondStart`/`secondEnd`. | 🟡 Con deuda (`3d80827`) | Heurístico "medio y medio" cumple pptx por coincidencia numérica. Migración → F1.4c. |
+| **F1.3** | Extender `splitShiftIntoSegments` para consumir `secondStart`/`secondEnd`. | 🟡 Con deuda (`3d80827`) | Nota histórica no verificada: el heurístico se describió como coincidente con una fuente que hoy no está disponible. Migración → F1.4c. |
 
 ### Fase 1.4 · Correctivas de Fase 1 ✅ COMPLETADA
 
@@ -341,7 +341,7 @@ Rediseño firmado por PO tras uso real. Hallazgo clave del Revisor tras F4.1: la
 
 | ID | Tarea | Responsable | Revisor | DoD |
 |---|---|---|---|---|
-| **F5** | Test suite de regresión para los 18 desgloses del motor con plantillas seed. | Revisor (dueño) + Dev Frontend (implementa) | PO | ✅ 18/18 casos verdes; no certifican equivalencia 1:1 con el PPTX. |
+| **F5** | Tests de regresión del comportamiento programado con plantillas seed. | Revisor (dueño) + Dev Frontend (implementa) | PO | ✅ 18/18 casos históricos verdes; prueban el código, no certifican reglas, horarios, tarifas ni equivalencia con una fuente externa. |
 
 ### Puertas de calidad entre fases
 
@@ -350,7 +350,7 @@ Rediseño firmado por PO tras uso real. Hallazgo clave del Revisor tras F4.1: la
 - **F2 → F3**: Un operador nuevo puede llenar una quincena en < 3 minutos sin abrir "Personalizar".
 - **F3 → F4**: PO aprueba la paleta por escrito.
 - **F4 → F5**: Todos los flujos funcionan con la UI nueva.
-- **F5 → cerrar MVP**: 18/18 casos de regresión verdes para seed y motor; la equivalencia con el PPTX requiere revisión independiente.
+- **F5 → cierre técnico**: los casos de regresión verdes muestran estabilidad del comportamiento programado. La comparación de nómina requiere la fuente empresarial vigente y aprobación del responsable; esa fuente no está en el repositorio.
 
 ---
 
@@ -432,34 +432,60 @@ La restauración requiere Web Locks; si no está disponible, queda deshabilitada
 
 ```text
 sandwichqbano/
+├── .gitignore
 ├── README.md                   ← este documento
-├── INVERSIONES CAICEDO BASTIDAS SAS COMPONENTES DE NOMINA.pptx
-│                               ← fuente única de reglas de negocio
+├── index.html
 ├── package.json
+├── package-lock.json
 ├── tsconfig.json
 ├── vite.config.ts
-├── index.html
 └── src/
     ├── App.tsx                 ← estado y coordinación de casos de uso
+    ├── components/
+    │   ├── EmployeeWeekCard.tsx
+    │   ├── LocalBackup.tsx     ← exportación y restauración local
+    │   ├── ShiftEditor.tsx
+    │   ├── WeekDayAssignment.tsx
+    │   ├── WeekNavigator.tsx
+    │   └── WeekSchedule.tsx    ← planificación semanal/quincenal
+    ├── data/
+    │   └── seed.ts             ← datos demostrativos y configuración provisional
+    ├── lib/
+    │   ├── brushSession.ts
+    │   ├── calculation.ts      ← cálculo programado de conceptos de nómina
+    │   ├── exportExcel.ts      ← exportación existente de nómina
+    │   ├── exportWeeklySchedule.ts ← exportación de programación semanal
+    │   ├── localBackup.ts      ← respaldo/restauración versionados
+    │   ├── periodIntegrity.ts  ← validación de fecha/período
+    │   ├── scheduleWeek.ts     ← períodos por fecha y vista semanal
+    │   ├── shiftSafety.ts
+    │   ├── storage.ts          ← persistencia local y bloqueo entre pestañas
+    │   ├── templates.ts
+    │   └── weeklySchedule.ts   ← minutos programados semanales (F3)
     ├── main.tsx                ← entry point React
-    ├── styles.css              ← paleta por sede + turno, layout
-    ├── components/             ← editor de turnos y presentación semanal
-    ├── vite-env.d.ts
-    │
+    ├── styles.css              ← estilos responsive y por sede/turno
+    ├── tests/
+    │   ├── brushSession.test.ts
+    │   ├── calculation.test.ts
+    │   ├── exportExcel.test.ts
+    │   ├── exportWeeklySchedule.test.ts
+    │   ├── localBackup.test.ts
+    │   ├── localBackupRestore.test.ts
+    │   ├── localBackupUi.test.ts
+    │   ├── payrollBreakdowns.test.ts
+    │   ├── periodIntegrity.test.ts
+    │   ├── scheduleWeek.test.ts
+    │   ├── seedTemplateReference.test.ts
+    │   ├── shiftSafety.test.ts
+    │   ├── shiftUi.test.ts
+    │   ├── storage.test.ts
+    │   ├── storageApp.test.ts
+    │   ├── templates.test.ts
+    │   ├── weeklySchedule.test.ts
+    │   └── weeklyScheduleUi.test.ts
     ├── types/
     │   └── payroll.ts          ← Company, Branch, Employee, Shift, PayrollSettings
-    │
-    ├── data/
-    │   └── seed.ts             ← seed con 3 sedes reales + defaultSettings
-    │
-    ├── lib/
-    │   ├── calculation.ts      ← motor de nómina
-    │   ├── scheduleWeek.ts     ← fechas civiles, período por fecha y adapter F3
-    │   ├── exportExcel.ts      ← generación de .xlsx
-    │   └── storage.ts          ← loadState / saveState + helpers de formato
-    │
-    └── tests/
-        └── calculation.test.ts ← tests del motor
+    └── vite-env.d.ts
 ```
 
 ---
@@ -511,30 +537,31 @@ Abre `http://localhost:5173`.
 Formato: `<tipo>(fase-id): descripción breve`
 
 - `feat(F2.2): añadir chips de turno en celda de horario`
-- `fix(F0.2): corregir nocturnalStart a 19:00`
-- `test(F5): validar Único VIE-SÁB Doblado = 7 ORD + 1 HED + 2,5 HEN`
+- `fix(F0.2): ajustar configuración de nocturnalStart`
+- `test(F5): agregar regresión del cálculo programado con el seed`
 
 Tipos: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`. **La categoría refleja el cambio predominante** — un commit que toca código productivo Y config de tests debe partirse, o etiquetarse por lo dominante.
 
 ### Convención de nombres
 
-- **Sedes**: siempre en el nombre real del pptx (`Avenida`, `Unicentro`, `Único`). Sin traducir, sin acortar.
-- **Conceptos**: siempre en el código del pptx (`RN`, `HED`, `HEN`, `DOM_DIURNO`, `DOM_NOCT`, `RN_DOM`, `HED_DOM`, `HEN_DOM`).
+- **Sedes**: usar los nombres configurados actualmente en la aplicación (`Avenida`, `Unicentro`, `Único`), sin traducir ni acortar. Su correspondencia con una fuente empresarial no está verificada aquí.
+- **Buckets/campos de resultado**: `RN`, `HED`, `HEN`, `DOM08`, `DOM18`, `RN_DOM`, `HED_DOM`, `HEN_DOM`. `DOM18` permanece como campo de referencia; el clasificador actual no lo asigna.
+- **Claves de configuración de multiplicadores**: `RN`, `HED`, `HEN`, `DOM_DIURNO`, `DOM_NOCT`, `RN_DOM`, `HED_DOM`, `HEN_DOM`. `DOM_DIURNO` configura `DOM08` y `DOM_NOCT` configura `DOM18`; estos identificadores no son buckets emitidos.
 - **Tipos de turno**: `partido`, `normal`, `doblado`, `descanso`. Minúsculas kebab en código; título en UI.
-- **Roles de empleado**: `sala`, `domicilio`. Solo aplica a Avenida hoy.
+- **Roles de empleado**: el prototipo define `sala` y `domicilio`; su disponibilidad depende de las plantillas configuradas y no certifica el catálogo empresarial.
 
-### Decisiones cerradas
+### Decisiones de implementación registradas (historial del proyecto)
 
 - **Commits directos a main durante MVP pre-producción.** Sin ramas, sin PRs. Ver sección 3.
-- **Jornada ordinaria = 7h/día** (`dailyOrdinaryHours = 7`). Firmado por PO 2026-07-02. El pptx refleja el pacto interno de la empresa, no la jornada legal estándar de 8h. Aplicado en `defaultSettings` y en `applyOrdinaryVsExtra`.
+- **Registro histórico no verificado (2026-07-02):** se anotó una decisión de proyecto para usar 7h/día (`dailyOrdinaryHours = 7`). El prototipo mantiene ese valor en `defaultSettings`; no es aprobación legal ni empresarial y requiere validación antes de usar importes.
 - **Fase 1 aceptada parcial (Opción B) 2026-07-02.** No se hizo revert de los commits `1a6a61a` + `645fb78` + `3d80827` + `a500c70`. Los faltantes de F1.1 y F1.2 se completaron en Fase 1.4 correctiva (`9a8679a` + `85fc267`→`2274644` + `3e7a7ff`). El motor F1.3 se migró a `secondStart`/`secondEnd` explícitos, el heurístico legacy queda como fallback.
 - **F1.4d (2026-07-02) — Fixes post-auditoría.** `fillDefaultsForPeriod` usa `shiftTemplates` en vez de `defaultStartTime`/`defaultEndTime`. Copy/paste preserva `templateId`, `secondStart`, `secondEnd`. Resuelto `npm audit` safe. Limpieza `.gitignore`.
-- **Domingo nocturno se clasifica como `RN_DOM` (tarifa 1,15) — firmado por PO 2026-07-02.** Antes se emitía `DOM18` (tarifa 1,80) para todo segmento dominical nocturno. El motor asigna `RN_DOM` a horas dominicales nocturnas ordinarias y `HEN_DOM` a las extras; `DOM18` no se emite en esa clasificación. Esta implementación no está validada 1:1 contra los desgloses genéricos del PPTX.
+- **Registro histórico de implementación no verificado (2026-07-02):** se anotó una clasificación de domingo nocturno con `RN_DOM`; el código actual la implementa junto con un factor configurado de 1,15. La mención a una aprobación anterior no sustituye la validación del responsable de nómina ni permite confirmar la regla o tarifa.
 - **Paleta oficial de sedes y turnos — firmada por Revisor con delegación explícita del PO 2026-07-02.** Sedes: Avenida `#DC2626`, Unicentro `#1E40AF`, Único `#15803D`. Turnos: Partido `#D97706`, Normal `#0891B2`, Doblado `#7C3AED`, Descanso `#6B7280`. Todas ≥ 4.5:1 contraste WCAG AA sobre blanco. Ver F3.1 para uso en CSS.
 - **`localStorage` como único backend del MVP.** Migrar a Supabase queda como V2.
 - **Un solo componente `App.tsx` para el MVP.** Rompemos en subcomponentes cuando pase 1000 líneas o el Revisor lo pida.
 - **CSS custom properties, no Tailwind.**
-- **Tests de referencia = regresión**. Si cambia el PPTX, el revisor debe contrastar sus desgloses y confirmar las franjas antes de actualizar expectativas o el motor.
+- **Tests de referencia = regresión del código**. No certifican reglas de negocio ni resultados de pago. Si se obtiene una fuente vigente y aprobada, el responsable de nómina debe contrastar reglas y horarios antes de actualizar expectativas o el motor.
 
 ### Decisiones abiertas (esperan PO)
 

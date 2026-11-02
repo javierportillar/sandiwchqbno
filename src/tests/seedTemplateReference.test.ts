@@ -18,8 +18,8 @@ type Reference = {
   netMinutes: number;
 };
 
-// Literal seed/README times are provisional, pending confirmation. Net durations
-// were contrasted with the PPTX; the PPTX is not a runtime test dependency.
+// Provisional regression fixtures from the current seed, not approved schedules.
+// Expected durations protect code behavior only and are not externally verified.
 const references: Reference[] = [
   { branchId: 'branch-unicentro', id: 'unicentro-ls-normal', role: undefined, dayScope: 'mon-sat', kind: 'normal', startTime: '14:00', endTime: '22:00', secondStart: undefined, secondEnd: undefined, breakMinutes: 0, netMinutes: 480 },
   { branchId: 'branch-unicentro', id: 'unicentro-ls-partido', role: undefined, dayScope: 'mon-sat', kind: 'partido', startTime: '11:00', endTime: '14:00', secondStart: '18:00', secondEnd: '22:00', breakMinutes: 0, netMinutes: 420 },
