@@ -355,9 +355,9 @@ Todo vive en `src/types/payroll.ts` y se persiste como JSON en `localStorage`. L
 | `qbano-settings` | `PayrollSettings` (nocturnalStart, multipliers, etc.). |
 | `qbano-adjustments` | Diccionario `periodId → employeeId → number` para "ajuste al 100%". |
 
-La aplicación no escribe las claves al abrir: guarda solo al editar. Compara los valores originales de las seis claves antes de habilitar la edición y antes de cada escritura; también bloquea la sesión al recibir un evento de cambio externo relevante. Si detecta un cambio, preserva el valor externo y avisa al usuario. Esta comparación no es atómica con la escritura: `localStorage` no tiene compare-and-swap, por lo que otra pestaña aún podría escribir entre ambas operaciones. No es una coordinación completa entre pestañas.
+La aplicación no escribe las claves al abrir: guarda solo al editar. Compara los valores originales de las seis claves antes de habilitar la edición y antes de cada escritura; también bloquea la sesión al recibir un evento de cambio externo relevante. En navegadores con Web Locks, las comprobaciones y escrituras de la app y del restore usan el mismo bloqueo exclusivo. `localStorage` no tiene compare-and-swap: pestañas antiguas que no usan ese bloqueo todavía podrían interferir, por eso hay que cerrarlas antes de restaurar.
 
-Si una lectura falla, contiene JSON inválido o tiene una forma superior inesperada, la aplicación bloquea la edición y todas las escrituras automáticas. Ante un fallo de escritura también bloquea la persistencia y advierte que puede haber cambios sin guardar. Las seis claves no son transaccionales: algunas podrían haberse guardado antes del fallo. La comprobación solo valida la forma superior, no el contenido interno: por ejemplo, `multipliers: null` puede provocar fallos al usar la configuración y queda pendiente de validación compatible con datos legacy. La validación anidada y la restauración no están implementadas.
+Si una lectura falla, contiene JSON inválido o tiene una forma superior inesperada, la aplicación bloquea la edición y todas las escrituras automáticas. Ante un fallo de escritura también bloquea la persistencia y advierte que puede haber cambios sin guardar. Las escrituras ordinarias siguen siendo por clave, no una transacción multi-key. La aplicación y la restauración usan el mismo Web Lock exclusivo cuando el navegador lo ofrece; `localStorage` por sí solo no bloquea otras pestañas, y las versiones anteriores no coordinadas pueden interferir. La comprobación de arranque y la comparación previa a cada escritura se repiten dentro de ese bloqueo. La validación de contenido de nómina sigue limitada al nivel superior para conservar compatibilidad con datos legacy.
 
 
 ### Turnos y revisión de datos anteriores
@@ -370,11 +370,15 @@ Un cambio de sede en borrador bloquea cálculo y exportación del período hasta
 
 Si cualquier intervalo termina después del último día del período seleccionado, el cálculo y la exportación a Excel quedan bloqueados: no hay una política de asignación aprobada para repartir esas horas entre períodos. El turno se conserva sin cambios.
 
-### Copia local (solo exportación)
+### Copia local (exportación y restauración)
 
-En **Configuración → Exportar copia local (JSON)**, o desde la pantalla de error de almacenamiento, se puede solicitar una descarga local. El archivo versionado contiene la fecha UTC y los valores crudos de las seis claves, incluidos valores corruptos y claves ausentes; no incluye otras claves ni envía datos por red. Si no se puede leer alguna clave, se cancela la exportación completa.
+En **Configuración → Copia de seguridad local**, o desde una pantalla de bloqueo, se puede solicitar una descarga local o seleccionar un archivo JSON para restaurar. La importación admite únicamente el envelope v1 exacto y las seis claves conocidas, cada una como texto crudo o `null`. No interpreta ni normaliza los payloads: valores corruptos, vacíos y campos legacy se conservan literalmente; `null` elimina esa clave. La vista previa muestra fecha UTC, claves ausentes y advertencias detectables de JSON o forma superior. Cancelar la vista previa no escribe ni elimina datos.
 
-**El archivo no está cifrado** y puede contener datos personales y salarios: guardarlo en un lugar seguro. Solo contiene datos persistidos; los cambios que estén únicamente en memoria pueden faltar. Las lecturas no son transaccionales entre pestañas. La app solicita la descarga, pero el navegador determina si la guarda; verifica el archivo. No se ha implementado importación ni restauración.
+Restaurar no repara ni migra datos. Si una clave importada contiene JSON corrupto o una forma que la app actual no puede abrir, el valor se conserva y la app vuelve a bloquear la edición en su pantalla de error habitual.
+
+Antes de modificar una clave, la restauración guarda y verifica un journal durable con el preimage exacto y el objetivo. Luego escribe o elimina las seis claves, verifica cada valor crudo y marca el journal como aplicado. Un journal pendiente bloquea el arranque: un estado preparado permite reintentar o revertir; uno aplicado permite conservar o revertir. Si una escritura o recuperación falla, el journal se conserva y la app sigue bloqueada. No hay migraciones, base de datos ni tráfico de red.
+
+La restauración requiere Web Locks; si no está disponible, queda deshabilitada. Cerrá las otras pestañas de la aplicación antes de restaurar, sobre todo las abiertas con versiones antiguas que no usan el bloqueo. **El archivo fuente no está cifrado** y puede contener datos personales y salarios: guardalo en un lugar seguro. Solo contiene datos persistidos; los cambios únicamente en memoria pueden faltar. La app solicita la descarga, pero el navegador no puede garantizar que la haya guardado: verificá el archivo.
 
 ---
 

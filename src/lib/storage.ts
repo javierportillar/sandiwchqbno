@@ -7,6 +7,33 @@ export const STORAGE_KEYS = {
   adjustments: 'qbano-adjustments'
 };
 
+export const STORAGE_LOCK_NAME = 'qbano-local-storage-transaction-v1';
+
+export interface StorageLockManagerLike {
+  request<T>(
+    name: string,
+    options: { mode: 'exclusive' },
+    callback: () => T | PromiseLike<T>
+  ): Promise<T>;
+}
+
+export const getStorageLockManager = (): StorageLockManagerLike | null => {
+  try {
+    if (typeof navigator === 'undefined') return null;
+    return (navigator as Navigator & { locks?: StorageLockManagerLike }).locks ?? null;
+  } catch {
+    return null;
+  }
+};
+
+export const withStorageLock = <T>(
+  callback: () => T | PromiseLike<T>,
+  lockManager: StorageLockManagerLike | null = getStorageLockManager()
+): Promise<T> => {
+  if (!lockManager) return Promise.reject(new Error('storage-lock-unavailable'));
+  return lockManager.request(STORAGE_LOCK_NAME, { mode: 'exclusive' }, callback);
+};
+
 export type StorageReadError = 'unavailable' | 'invalid-json' | 'invalid-shape';
 export type StorageReadResult<T> =
   | { ok: true; value: T; source: 'stored' | 'absent'; raw: string | null }

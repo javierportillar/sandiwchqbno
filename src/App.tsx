@@ -19,8 +19,10 @@ import {
   seededPayPeriods,
   seededShifts
 } from './data/seed';
-import { checkSnapshot, fixed2, loadState, pesos, saveState, STORAGE_KEYS as KEY, uid } from './lib/storage';
-import { LocalBackup } from './components/LocalBackup';
+import { checkSnapshot, fixed2, getStorageLockManager, loadState, pesos, saveState, STORAGE_KEYS as KEY, uid, withStorageLock } from './lib/storage';
+import { LocalBackup, LocalRestoreRecovery } from './components/LocalBackup';
+import { readRestoreJournal, RESTORE_JOURNAL_KEY } from './lib/localBackup';
+import type { RestoreJournalRead, RestoreResult } from './lib/localBackup';
 import { ShiftEditor } from './components/ShiftEditor';
 import { duplicateShiftGroups, endsBeyondPeriodEnd, isEmptyShift, needsShiftReview, normalTemplateForEmployee, templateFields } from './lib/shiftSafety';
 import type { StorageReadError, StorageSnapshot } from './lib/storage';
@@ -156,7 +158,7 @@ type StoredData = {
   adjustments: Record<string, Record<string, number>>;
 };
 
-type GateError = StorageReadError | 'changed' | 'write-failed';
+type GateError = StorageReadError | 'changed' | 'write-failed' | 'lock-failed' | 'restore-failed';
 type InitialData = { ok: true; data: StoredData; snapshot: StorageSnapshot } | { ok: false; error: Exclude<GateError, 'write-failed'> };
 
 const readInitialData = (): InitialData => {
@@ -185,14 +187,24 @@ const readInitialData = (): InitialData => {
 function App() {
   const [initial, setInitial] = useState<InitialData | null>(null);
   const [runtimeError, setRuntimeError] = useState<GateError | null>(null);
+  const [recovery, setRecovery] = useState<Exclude<RestoreJournalRead, { kind: 'none' }> | null>(null);
   const blocked = useRef(true);
   const readFailure = useRef<Extract<InitialData, { ok: false }> | null>(null);
+  const recoveryFailure = useRef<Exclude<RestoreJournalRead, { kind: 'none' }> | null>(null);
   const firstSnapshot = useRef<StorageSnapshot | null>(null);
   const expected = useRef<StorageSnapshot | null>(null);
 
   useEffect(() => {
     let active = true;
     const onStorage = (event: StorageEvent) => {
+      if (event.key === RESTORE_JOURNAL_KEY) {
+        blocked.current = true;
+        expected.current = null;
+        const journal = readRestoreJournal();
+        if (journal.kind === 'none') setRuntimeError('restore-failed');
+        else setRecovery(journal);
+        return;
+      }
       if (event.key !== null && !Object.values(KEY).includes(event.key)) return;
       try {
         if (event.storageArea && event.storageArea !== localStorage) return;
@@ -208,6 +220,16 @@ function App() {
       setRuntimeError('changed');
     };
     window.addEventListener('storage', onStorage);
+    const journal = readRestoreJournal();
+    if (journal.kind !== 'none') recoveryFailure.current ??= journal;
+    if (recoveryFailure.current) {
+      queueMicrotask(() => {
+        if (!active) return;
+        blocked.current = true;
+        setRecovery(recoveryFailure.current);
+      });
+      return () => { active = false; window.removeEventListener('storage', onStorage); };
+    }
     const result = readInitialData();
     if (!result.ok) {
       readFailure.current ??= result;
@@ -223,15 +245,27 @@ function App() {
     queueMicrotask(() => {
       if (!active) return;
       let settled: InitialData = readFailure.current ?? result;
-      if (settled.ok) {
-        const error = checkSnapshot(settled.snapshot);
-        if (error) settled = { ok: false, error };
+      const release = () => {
+        if (settled.ok) {
+          const error = checkSnapshot(settled.snapshot);
+          if (error) settled = { ok: false, error };
+        }
+        if (settled.ok) {
+          expected.current = settled.snapshot;
+          blocked.current = false;
+        }
+        setInitial(settled);
+      };
+      const locks = getStorageLockManager();
+      if (settled.ok && locks) {
+        void withStorageLock(release, locks).catch(() => {
+          if (!active) return;
+          blocked.current = true;
+          setInitial({ ok: false, error: 'lock-failed' });
+        });
+      } else {
+        release();
       }
-      if (settled.ok) {
-        expected.current = settled.snapshot;
-        blocked.current = false;
-      }
-      setInitial(settled);
     });
     return () => { active = false; window.removeEventListener('storage', onStorage); };
   }, []);
@@ -248,27 +282,87 @@ function App() {
 
   const persist = useCallback((key: string, value: unknown) => {
     if (blocked.current || !expected.current) return;
-    const error = checkSnapshot(expected.current);
-    if (error) {
+    const commit = () => {
+      if (blocked.current || !expected.current) return;
+      const journal = readRestoreJournal();
+      if (journal.kind !== 'none') {
+        blocked.current = true;
+        expected.current = null;
+        setRecovery(journal);
+        return;
+      }
+      const error = checkSnapshot(expected.current);
+      if (error) {
+        blocked.current = true;
+        setRuntimeError(error);
+        return;
+      }
+      const result = saveState(key, value);
+      if (!result.ok) {
+        blocked.current = true;
+        setRuntimeError('write-failed');
+        return;
+      }
+      expected.current[key] = result.raw;
+    };
+    const locks = getStorageLockManager();
+    if (locks) {
+      void withStorageLock(commit, locks).catch(() => {
+        blocked.current = true;
+        setRuntimeError('lock-failed');
+      });
+    } else {
       blocked.current = true;
-      setRuntimeError(error);
-      return;
+      setRuntimeError('lock-failed');
     }
-    const result = saveState(key, value);
-    if (!result.ok) {
-      blocked.current = true;
-      setRuntimeError('write-failed');
-      return;
-    }
-    expected.current[key] = result.raw;
   }, []);
+
+  const handleRestoreStarted = useCallback(() => {
+    blocked.current = true;
+  }, []);
+  const handleRestoreProblem = useCallback((reason: Extract<RestoreResult, { ok: false }>['reason']) => {
+    blocked.current = true;
+    if (reason === 'snapshot-changed') {
+      setRuntimeError('changed');
+      return;
+    }
+    const journal = readRestoreJournal();
+    if (journal.kind !== 'none') {
+      setRecovery(journal);
+      return;
+    }
+    setRuntimeError('restore-failed');
+  }, []);
+  const handleRestoreComplete = useCallback(() => {
+    blocked.current = true;
+    const journal = readRestoreJournal();
+    if (journal.kind === 'valid' && journal.journal.status === 'applied') {
+      setRecovery(journal);
+      window.location.reload();
+      return;
+    }
+    setRecovery(journal.kind === 'none' ? { kind: 'malformed' } : journal);
+  }, []);
+  const handleRecoveryResolved = useCallback(() => {
+    blocked.current = true;
+    expected.current = null;
+    setRecovery(null);
+    setRuntimeError('restore-failed');
+    window.location.reload();
+  }, []);
+  const backupCallbacks = {
+    onRestoreStarted: handleRestoreStarted,
+    onRestoreProblem: handleRestoreProblem,
+    onRestoreComplete: handleRestoreComplete
+  };
 
   const readError = initial && !initial.ok ? initial.error : null;
   const error = readError ?? runtimeError;
   return (
     <>
-      {!initial && <main className="app-shell"><p role="status">Comprobando almacenamiento local…</p></main>}
-      {error && (
+      {recovery && <LocalRestoreRecovery initial={recovery} onResolved={handleRecoveryResolved} />}
+      {!recovery && !initial && <main className="app-shell"><p role="status">Comprobando almacenamiento local…</p></main>}
+      {!recovery && error && (
         <main className="app-shell">
           <section className="panel storage-error" role="alert">
             <h1>No se puede usar el almacenamiento local</h1>
@@ -277,13 +371,15 @@ function App() {
             {error === 'unavailable' && <p>El navegador impidió leer el almacenamiento local.</p>}
             {error === 'changed' && <p>Los datos locales cambiaron fuera de esta sesión. Se detuvo la edición para evitar sobrescribirlos.</p>}
             {error === 'write-failed' && <p>El navegador impidió guardar los cambios. No se puede asegurar que se hayan guardado todos.</p>}
+            {error === 'lock-failed' && <p>No se pudo adquirir el bloqueo exclusivo para validar o guardar. La edición se detuvo.</p>}
+            {error === 'restore-failed' && <p>La restauración no se pudo confirmar. La edición permanece bloqueada; revisá el registro de recuperación antes de continuar.</p>}
             <p>La edición y las escrituras automáticas están bloqueadas. No borres los datos del navegador; contacta a soporte para revisar la situación.</p>
             {runtimeError && <p>No recargues ni cierres esta página: podría haber cambios que solo están en memoria.</p>}
           </section>
-          <section className="panel"><LocalBackup /></section>
+          <section className="panel"><LocalBackup {...backupCallbacks} /></section>
         </main>
       )}
-      {initial?.ok && <div hidden={!!runtimeError}><AppContent initial={initial.data} persist={persist} /></div>}
+      {initial?.ok && <div hidden={!!runtimeError || !!recovery}><AppContent initial={initial.data} persist={persist} backupCallbacks={backupCallbacks} /></div>}
     </>
   );
 }
@@ -297,7 +393,15 @@ function usePersistOnChange(key: string, value: unknown, persist: (key: string, 
   }, [key, value, persist]);
 }
 
-function AppContent({ initial, persist }: { initial: StoredData; persist: (key: string, value: unknown) => void }) {
+function AppContent({ initial, persist, backupCallbacks }: {
+  initial: StoredData;
+  persist: (key: string, value: unknown) => void;
+  backupCallbacks: {
+    onRestoreStarted: () => void;
+    onRestoreProblem: (reason: Extract<RestoreResult, { ok: false }>['reason']) => void;
+    onRestoreComplete: () => void;
+  };
+}) {
   const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
   const [branches] = useState(initial.branches);
   const [employees, setEmployees] = useState(initial.employees);
@@ -1423,7 +1527,7 @@ function AppContent({ initial, persist }: { initial: StoredData; persist: (key: 
       {activeTab === 'configuracion' && (
         <section className="panel grid">
           <h2>5. Configuración</h2>
-          <LocalBackup />
+          <LocalBackup {...backupCallbacks} />
           <div className="grid grid-2">
             <label>
               Inicio nocturno

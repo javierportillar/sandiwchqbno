@@ -530,6 +530,40 @@ small.muted {
   background: #fffaf0;
 }
 
+.local-backup-restore {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  width: 100%;
+  padding-top: 12px;
+  border-top: 1px solid #e7d9bd;
+}
+
+.local-backup-restore h4,
+.local-backup-preview h5 {
+  margin: 0;
+}
+
+.local-backup-restore input[type='file'] {
+  max-width: 100%;
+}
+
+.local-backup-preview {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid #d8c7a5;
+  border-radius: 8px;
+  background: #fffdf8;
+}
+
+.local-backup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .review-warning {
   color: #8b261b;
   font-weight: 700;

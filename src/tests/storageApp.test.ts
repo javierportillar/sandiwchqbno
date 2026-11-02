@@ -4,6 +4,16 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
 import { defaultSettings, seededBranches, seededEmployees, seededPayPeriods, seededShifts } from '../data/seed';
+import {
+  BACKUP_FORMAT,
+  BACKUP_VERSION,
+  RESTORE_JOURNAL_KEY,
+  parseLocalBackup,
+  previewLocalBackup,
+  restoreLocalBackup
+} from '../lib/localBackup';
+import { STORAGE_LOCK_NAME } from '../lib/storage';
+import type { StorageLockManagerLike } from '../lib/storage';
 
 const initial = {
   'qbano-branches': JSON.stringify(seededBranches),
@@ -14,20 +24,66 @@ const initial = {
   'qbano-adjustments': JSON.stringify({})
 };
 const keys = Object.keys(initial) as Array<keyof typeof initial>;
+let lockManagerInstalled = false;
 
 function fakeStorage(values: Record<string, string> = {}) {
   const data = new Map(Object.entries(values));
   const getItem = vi.fn((key: string) => data.get(key) ?? null);
   const setItem = vi.fn((key: string, value: string) => { data.set(key, value); });
-  vi.stubGlobal('localStorage', { getItem, setItem });
-  return { data, getItem, setItem };
+  const removeItem = vi.fn((key: string) => { data.delete(key); });
+  vi.stubGlobal('localStorage', { getItem, setItem, removeItem });
+  return { data, getItem, setItem, removeItem };
+}
+
+function installWebLocks() {
+  const calls = vi.fn((name: string, options: { mode: 'exclusive' }) => ({ name, mode: options.mode }));
+  vi.stubGlobal('navigator', {
+    locks: {
+      request: (name: string, options: { mode: 'exclusive' }, callback: () => unknown) => {
+        calls(name, options);
+        return Promise.resolve(callback());
+      }
+    }
+  });
+  lockManagerInstalled = true;
+  return calls;
+}
+
+function installQueuedWebLocks() {
+  let active = false;
+  const pending: Array<() => void> = [];
+  const request = vi.fn((_name: string, _options: { mode: 'exclusive' }, callback: () => unknown) =>
+    new Promise<unknown>((resolve, reject) => {
+      const run = (insideAct = false) => {
+        active = true;
+        try {
+          const result = insideAct ? act(() => callback()) : callback();
+          Promise.resolve(result).then(resolve, reject).finally(() => {
+            active = false;
+            pending.shift()?.();
+          });
+        } catch (error) {
+          reject(error);
+          active = false;
+          pending.shift()?.();
+        }
+      };
+      if (active) pending.push(() => run(true));
+      else run();
+    })
+  );
+  const lockManager: StorageLockManagerLike = { request: request as unknown as StorageLockManagerLike['request'] };
+  vi.stubGlobal('navigator', { locks: lockManager });
+  lockManagerInstalled = true;
+  return { lockManager, request };
 }
 
 const mount = async () => {
+  if (!lockManagerInstalled) installWebLocks();
   await act(async () => { render(createElement(StrictMode, null, createElement(App))); });
 };
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); lockManagerInstalled = false; });
 
 describe('storage protection in App', () => {
   it('initializes a new installation normally', async () => {
@@ -252,6 +308,7 @@ describe('storage protection in App', () => {
     { strict: true, key: 'qbano-branches', raw: '[]' }
   ])('detects external change to $key before editing (strict=$strict)', async ({ strict, key, raw }) => {
     const storage = fakeStorage(initial);
+    installWebLocks();
     await act(async () => {
       render(strict ? createElement(StrictMode, null, createElement(App)) : createElement(App));
     });
@@ -327,6 +384,159 @@ describe('storage protection in App', () => {
     expect(JSON.parse(storage.data.get('qbano-employees')!).slice(-2).map((employee: { fullName: string }) => employee.fullName))
       .toEqual(['First Test', 'Second Test']);
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('coordinates app persistence with the same exclusive Web Lock used by restore', async () => {
+    const storage = fakeStorage(initial);
+    const lockCalls = installWebLocks();
+    await mount();
+    fireEvent.click(screen.getByRole('button', { name: 'Empleados' }));
+    fireEvent.change(screen.getByLabelText('Nombre completo'), { target: { value: 'Locked Writer' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Crear empleado' }));
+    await act(async () => {});
+    expect(storage.setItem.mock.calls.map(([key]) => key)).toEqual(['qbano-employees']);
+    expect(lockCalls.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(lockCalls.mock.calls.every(([name, options]) => name === STORAGE_LOCK_NAME && options.mode === 'exclusive')).toBe(true);
+  });
+
+  it('refuses a queued normal save after restore leaves a prepared journal before target writes', async () => {
+    const storage = fakeStorage(initial);
+    const { lockManager, request } = installQueuedWebLocks();
+    await mount();
+    const target = { ...initial, 'qbano-employees': '[{"fullName":"From backup"}]' };
+    const backup = parseLocalBackup(JSON.stringify({
+      format: BACKUP_FORMAT,
+      version: BACKUP_VERSION,
+      exportedAt: '2026-11-02T12:34:56.789Z',
+      values: target
+    }));
+    const snapshot = previewLocalBackup(backup).snapshot;
+    let queuedEdit = false;
+    storage.setItem.mockImplementation((key, value) => {
+      if (key === RESTORE_JOURNAL_KEY) {
+        storage.data.set(key, value);
+        if (!queuedEdit) {
+          queuedEdit = true;
+          fireEvent.click(screen.getByRole('button', { name: 'Empleados' }));
+          fireEvent.change(screen.getByLabelText('Nombre completo'), { target: { value: 'Queued writer' } });
+          fireEvent.click(screen.getByRole('button', { name: 'Crear empleado' }));
+        }
+        return;
+      }
+      if (key === 'qbano-branches') throw new DOMException('full', 'QuotaExceededError');
+      storage.data.set(key, value);
+    });
+
+    const restoreResult = await restoreLocalBackup(backup, snapshot, undefined, lockManager);
+    await act(async () => {});
+
+    expect(restoreResult).toMatchObject({ ok: false, reason: 'target-write-failed' });
+    expect(storage.data.get(RESTORE_JOURNAL_KEY)).toBeTruthy();
+    expect(Object.fromEntries([...storage.data].filter(([key]) => key !== RESTORE_JOURNAL_KEY))).toEqual(initial);
+    expect(screen.getByRole('heading', { name: 'Recuperación de datos locales requerida' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Crear empleado' })).toBeNull();
+    expect(storage.setItem.mock.calls.some(([key]) => key === 'qbano-employees')).toBe(false);
+    expect(request).toHaveBeenCalledTimes(3);
+    expect(request.mock.calls.every(([name, options]) => name === STORAGE_LOCK_NAME && options.mode === 'exclusive')).toBe(true);
+  });
+
+  it('blocks editing and preserves a malformed journal discovered inside the save lock', async () => {
+    const storage = fakeStorage(initial);
+    installWebLocks();
+    await mount();
+    storage.data.set(RESTORE_JOURNAL_KEY, '{malformed-after-startup');
+    fireEvent.click(screen.getByRole('button', { name: 'Empleados' }));
+    fireEvent.change(screen.getByLabelText('Nombre completo'), { target: { value: 'Must not save' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Crear empleado' }));
+
+    expect(screen.getByRole('heading', { name: 'Recuperación de datos locales requerida' })).toBeTruthy();
+    expect(screen.getByText(/registro de recuperación está dañado/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Crear empleado' })).toBeNull();
+    expect(storage.data.get(RESTORE_JOURNAL_KEY)).toBe('{malformed-after-startup');
+    expect(Object.fromEntries([...storage.data].filter(([key]) => key !== RESTORE_JOURNAL_KEY))).toEqual(initial);
+    expect(storage.setItem).not.toHaveBeenCalled();
+    expect(storage.removeItem).not.toHaveBeenCalled();
+  });
+
+  it('never falls back to an unlocked normal save when Web Locks are unavailable', async () => {
+    const storage = fakeStorage(initial);
+    render(createElement(App));
+    await act(async () => {});
+    fireEvent.click(screen.getByRole('button', { name: 'Empleados' }));
+    fireEvent.change(screen.getByLabelText('Nombre completo'), { target: { value: 'Must stay in memory' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Crear empleado' }));
+
+    expect(screen.getByRole('alert').textContent).toContain('bloqueo exclusivo');
+    expect(screen.queryByRole('button', { name: 'Crear empleado' })).toBeNull();
+    expect(Object.fromEntries(storage.data)).toEqual(initial);
+    expect(storage.setItem).not.toHaveBeenCalled();
+  });
+
+  it('blocks normal startup for a malformed journal', async () => {
+    const storage = fakeStorage({ ...initial, [RESTORE_JOURNAL_KEY]: '{malformed' });
+    await mount();
+    expect(screen.getByRole('heading', { name: 'Recuperación de datos locales requerida' })).toBeTruthy();
+    expect(screen.getByText(/registro de recuperación está dañado/)).toBeTruthy();
+    expect(screen.queryByText('1. Dashboard')).toBeNull();
+    expect(storage.setItem).not.toHaveBeenCalled();
+    expect(storage.removeItem).not.toHaveBeenCalled();
+  });
+
+  it('offers retry and rollback after a prepared partial transaction is found on startup', async () => {
+    installWebLocks();
+    const before = { ...initial, 'qbano-branches': '{before-raw' };
+    const target = { ...initial, 'qbano-employees': '' };
+    const journal = {
+      format: 'sandwich-qbano-local-restore-journal',
+      version: 1,
+      transactionId: 'prepared-test',
+      createdAt: '2026-11-02T12:34:56.789Z',
+      status: 'prepared',
+      before,
+      target
+    };
+    const storage = fakeStorage({ ...target, 'qbano-branches': '{partial-target', [RESTORE_JOURNAL_KEY]: JSON.stringify(journal) });
+    await mount();
+    expect(screen.queryByText('1. Dashboard')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Reintentar restauración' }).hasAttribute('disabled')).toBe(false);
+    expect(screen.getByRole('button', { name: 'Revertir a los datos anteriores' }).hasAttribute('disabled')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Reintentar restauración' }));
+    expect(await screen.findByText(/La copia se aplicó y verificó/)).toBeTruthy();
+    expect(storage.data.get('qbano-branches')).toBe(target['qbano-branches']);
+    expect(storage.data.get('qbano-employees')).toBe('');
+    expect(JSON.parse(storage.data.get(RESTORE_JOURNAL_KEY)!).status).toBe('applied');
+    expect(screen.getByRole('button', { name: 'Conservar los datos restaurados' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Revertir a los datos anteriores' })).toBeTruthy();
+    expect(screen.queryByText('1. Dashboard')).toBeNull();
+  });
+
+  it('keeps the app blocked and the journal when recovery fails partway through rollback', async () => {
+    const lockCalls = installWebLocks();
+    const before = { ...initial, 'qbano-branches': '{before-raw', 'qbano-employees': '', 'qbano-periods': '{old-periods' };
+    const target = { ...initial };
+    const journal = {
+      format: 'sandwich-qbano-local-restore-journal',
+      version: 1,
+      transactionId: 'restore-test',
+      createdAt: '2026-11-02T12:34:56.789Z',
+      status: 'applied',
+      before,
+      target
+    };
+    const storage = fakeStorage({ ...target, [RESTORE_JOURNAL_KEY]: JSON.stringify(journal) });
+    storage.setItem.mockImplementation((key, value) => {
+      if (key === 'qbano-periods') throw new DOMException('full', 'QuotaExceededError');
+      storage.data.set(key, value);
+    });
+    await mount();
+    expect(screen.queryByText('1. Dashboard')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Revertir a los datos anteriores' }));
+    expect(await screen.findByText(/La escritura quedó incompleta/)).toBeTruthy();
+    expect(screen.queryByText('1. Dashboard')).toBeNull();
+    expect(storage.data.get(RESTORE_JOURNAL_KEY)).toBe(JSON.stringify(journal));
+    expect(storage.data.get('qbano-branches')).toBe(before['qbano-branches']);
+    expect(lockCalls.mock.calls.every(([name, options]) => name === STORAGE_LOCK_NAME && options.mode === 'exclusive')).toBe(true);
+    expect(storage.removeItem).not.toHaveBeenCalled();
   });
 
   it.each(['qbano-shifts', null])('blocks on relevant storage event %s', async (key) => {

@@ -21,7 +21,12 @@ function setup(shifts: Shift[], person: Employee = employee, selectedPeriod = pe
   vi.stubGlobal('localStorage', { getItem: (key: string) => data.get(key) ?? null, setItem });
   return { data, setItem };
 }
-async function mount() { await act(async () => { render(createElement(StrictMode, null, createElement(App))); }); }
+async function mount() {
+  vi.stubGlobal('navigator', {
+    locks: { request: async (_name: string, _options: { mode: 'exclusive' }, callback: () => unknown) => await callback() }
+  });
+  await act(async () => { render(createElement(StrictMode, null, createElement(App))); });
+}
 function openSchedule() { fireEvent.click(screen.getByRole('button', { name: 'Horarios' })); }
 function menu() { return within(document.querySelector('.mini-selector') as HTMLElement); }
 function enterTimes(start: string, end: string) {
