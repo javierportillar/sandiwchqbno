@@ -210,6 +210,14 @@ describe('motor de cálculo de nómina', () => {
       employees: seededEmployees,
       settings: defaultSettings,
       periodId: 'period-1',
+      period: {
+        id: 'period-1', companyId: seededEmployees[0].companyId,
+        startDate: '2026-01-01', endDate: '2026-01-02', label: 'Test period'
+      },
+      periods: [{
+        id: 'period-1', companyId: seededEmployees[0].companyId,
+        startDate: '2026-01-01', endDate: '2026-01-02', label: 'Test period'
+      }],
       adjustments: {
         [seededEmployees[0].id]: 1000
       }

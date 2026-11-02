@@ -31,6 +31,8 @@ import type { EmployeeWeekActions } from './components/EmployeeWeekCard';
 import { duplicateShiftGroups, endsBeyondPeriodEnd, isEmptyShift, needsShiftReview, normalTemplateForEmployee, templateFields } from './lib/shiftSafety';
 import type { StorageReadError, StorageSnapshot } from './lib/storage';
 import { aggregateDailyAndPeriod, calculateShiftTotals } from './lib/calculation';
+import { validatePayPeriodRange, validatePayrollPeriodIntegrity } from './lib/periodIntegrity';
+import type { PeriodIntegrityIssue } from './lib/periodIntegrity';
 import { exportPayrollExcel } from './lib/exportExcel';
 import { resolveTemplateForDate, listTemplatesForDate } from './lib/templates';
 import { canRestoreAssignment, restoreAssignmentInList } from './lib/brushSession';
@@ -39,7 +41,9 @@ import {
   addDaysToDate,
   buildEmployeeWeekSchedule,
   buildScheduleCellKey as buildShiftKey,
-  getInitialScheduleWeekStart
+  getInitialScheduleWeekStart,
+  getMondayWeekStart,
+  isCivilDate
 } from './lib/scheduleWeek';
 import type { EmployeeWeekDay } from './lib/scheduleWeek';
 
@@ -437,6 +441,7 @@ function AppContent({ initial, persist, backupCallbacks }: {
     startDate: '',
     endDate: ''
   });
+  const [periodCreationError, setPeriodCreationError] = useState('');
 
   const [customizingCells, setCustomizingCells] = useState<Record<string, boolean>>({});
   const [pendingBranches, setPendingBranches] = useState<Record<string, string>>({});
@@ -532,12 +537,15 @@ function AppContent({ initial, persist, backupCallbacks }: {
     : ({} as Record<string, number>);
 
   const periodShifts = selectedPeriod ? shifts.filter((shift) => shift.payPeriodId === selectedPeriod.id) : [];
+  const periodIntegrityIssues = selectedPeriod
+    ? validatePayrollPeriodIntegrity(selectedPeriod, periods, shifts)
+    : [];
   const duplicates = duplicateShiftGroups(periodShifts);
   const duplicateKeys = new Set(duplicates.map((group) => buildShiftKey(group[0].employeeId, group[0].payPeriodId, group[0].date)));
   const reviewShifts = periodShifts.filter((shift) => !duplicateKeys.has(buildShiftKey(shift.employeeId, shift.payPeriodId, shift.date)) && isShiftReviewNeeded(shift));
   const periodBoundaryReviewShifts = reviewShifts.filter(endsBeyondSelectedPeriod);
   const hasPendingBranch = Boolean(selectedPeriod && Object.keys(pendingBranches).some((key) => JSON.parse(key)[0] === selectedPeriod.id));
-  const calculationBlocked = reviewShifts.length > 0 || duplicates.length > 0 || hasPendingBranch;
+  const calculationBlocked = reviewShifts.length > 0 || duplicates.length > 0 || hasPendingBranch || periodIntegrityIssues.length > 0;
   const calculationResult = calculation && selectedPeriod && calculation.periodId === selectedPeriod.id &&
     calculation.shifts === shifts && calculation.employees === employees && calculation.settings === settings &&
     calculation.adjustments === adjustmentsByPeriod && !calculationBlocked ? calculation.result : null;
@@ -552,11 +560,93 @@ function AppContent({ initial, persist, backupCallbacks }: {
       employees,
       settings,
       periodId: selectedPeriod.id,
+      period: selectedPeriod,
+      periods,
       adjustments: periodAdjustments
     });
 
     setCalculation({ result, periodId: selectedPeriod.id, shifts, employees, settings, adjustments: adjustmentsByPeriod });
   };
+
+  const openIntegrityWeek = (date: string, storedPeriodId: string, employeeId: string) => {
+    const employeeMatches = employees.filter((employee) => employee.id === employeeId);
+    if (
+      !isCivilDate(date) ||
+      periods.filter((period) => period.id === storedPeriodId).length !== 1 ||
+      employeeMatches.length !== 1
+    ) return;
+
+    const employee = employeeMatches[0];
+    const branchGroupId = branches.some((branch) => branch.id === employee.branchId)
+      ? employee.branchId
+      : 'unknown-branch';
+    setSelectedPeriodId(storedPeriodId);
+    setBranchFilter('all');
+    setCollapsedBranches((previous) => {
+      const next = new Set(previous);
+      next.delete(branchGroupId);
+      return next;
+    });
+    setWeekStartDate(getMondayWeekStart(date));
+    setScheduleView('week');
+    setActiveTab('horarios');
+  };
+
+  const openIntegrityPeriod = (periodId: string) => {
+    if (periods.filter((period) => period.id === periodId).length !== 1) return;
+    setSelectedPeriodId(periodId);
+    setActiveTab('dashboard');
+  };
+
+  const getStoredPeriodIdForIssue = (issue: PeriodIntegrityIssue): string | undefined => {
+    if (issue.code === 'shift-period-mismatch') return issue.relatedPeriodId;
+    if (issue.code === 'shift-outside-period') return issue.periodId;
+    return undefined;
+  };
+
+  const getShiftIssueRecovery = (issue: PeriodIntegrityIssue) => {
+    if (issue.code !== 'shift-period-mismatch' && issue.code !== 'shift-outside-period') return null;
+
+    const storedPeriodId = getStoredPeriodIdForIssue(issue);
+    const storedPeriodCount = storedPeriodId
+      ? periods.filter((period) => period.id === storedPeriodId).length
+      : 0;
+    const matchingShifts = issue.shiftId ? shifts.filter((shift) => shift.id === issue.shiftId) : [];
+    const shift = matchingShifts.length === 1 ? matchingShifts[0] : undefined;
+    const matchingEmployees = shift ? employees.filter((employee) => employee.id === shift.employeeId) : [];
+    const employee = matchingEmployees.length === 1 ? matchingEmployees[0] : undefined;
+    const shiftMatchesIssue = Boolean(shift && shift.payPeriodId === storedPeriodId && shift.date === issue.date);
+    const canNavigate = Boolean(
+      issue.shiftId && issue.date && isCivilDate(issue.date) && storedPeriodCount === 1 &&
+      matchingShifts.length === 1 && shiftMatchesIssue && matchingEmployees.length === 1
+    );
+    const backupReasons: string[] = [];
+
+    if (storedPeriodCount !== 1) {
+      backupReasons.push(`el payPeriodId guardado ${storedPeriodId || '(vacío)'} no identifica un único período guardado`);
+    }
+    if (matchingShifts.length !== 1 || !shiftMatchesIssue) {
+      backupReasons.push(`no existe un registro único del turno ${issue.shiftId ?? '(sin ID)'}`);
+    }
+    if (shift && matchingEmployees.length !== 1) {
+      backupReasons.push(`no existe un empleado único guardado con ID ${shift.employeeId}`);
+    }
+    if (!issue.date || !isCivilDate(issue.date)) {
+      backupReasons.push('la fecha del turno no permite abrir una semana válida');
+    }
+
+    return {
+      storedPeriodId,
+      employeeId: employee?.id,
+      canNavigate,
+      backupOnly: !canNavigate,
+      backupMessage: `No se ofrece enlace a Horarios porque ${backupReasons.join('; ')}. Para este registro, la recuperación disponible es una copia local anterior que sepas válida.`
+    };
+  };
+
+  const hasBackupOnlyShiftRecovery = periodIntegrityIssues.some((issue) =>
+    Boolean(getShiftIssueRecovery(issue)?.backupOnly)
+  );
 
   const upsertShiftForPeriod = (employeeId: string, periodId: string, date: string, patch: Partial<Shift>): Shift | undefined => {
     const key = buildShiftKey(employeeId, periodId, date);
@@ -718,8 +808,22 @@ function AppContent({ initial, persist, backupCallbacks }: {
     setNewEmployee((prev) => ({ ...prev, fullName: '', documentId: '', role: '' }));
   };
 
+  const saveNewPeriod = (period: PayPeriod, clearCustomInputs = false) => {
+    const issues = validatePayPeriodRange(period, periods);
+    if (issues.length > 0) {
+      setPeriodCreationError(`${issues.map((issue) => issue.message).join(' ')} El período no se creó.`);
+      return;
+    }
+
+    setPeriodCreationError('');
+    setPeriods((prev) => [period, ...prev]);
+    setSelectedPeriodId(period.id);
+    if (clearCustomInputs) setNewPeriod({ startDate: '', endDate: '' });
+  };
+
   const addPeriod = () => {
     if (!newPeriod.startDate || !newPeriod.endDate) {
+      setPeriodCreationError('Ingresá una fecha de inicio y una fecha de fin para crear el período.');
       return;
     }
     const period: PayPeriod = {
@@ -729,9 +833,7 @@ function AppContent({ initial, persist, backupCallbacks }: {
       endDate: newPeriod.endDate,
       label: buildPeriodLabel(newPeriod.startDate, newPeriod.endDate)
     };
-    setPeriods((prev) => [period, ...prev]);
-    setSelectedPeriodId(period.id);
-    setNewPeriod({ startDate: '', endDate: '' });
+    saveNewPeriod(period, true);
   };
 
   const createHalfMonthPeriod = (yearMonth: string, half: '1' | '2') => {
@@ -753,8 +855,7 @@ function AppContent({ initial, persist, backupCallbacks }: {
       label: buildPeriodLabel(startDate, endDate)
     };
 
-    setPeriods((prev) => [period, ...prev]);
-    setSelectedPeriodId(period.id);
+    saveNewPeriod(period);
   };
 
   const applyBrush = (employee: Employee, date: string) => {
@@ -869,7 +970,7 @@ function AppContent({ initial, persist, backupCallbacks }: {
   };
 
   const formatConcepts = (shift: Shift | undefined) => {
-    if (!shift || isShiftReviewNeeded(shift)) {
+    if (!shift || periodIntegrityIssues.length > 0 || isShiftReviewNeeded(shift)) {
       return '';
     }
 
@@ -932,8 +1033,8 @@ function AppContent({ initial, persist, backupCallbacks }: {
                 value={selectedPeriod?.id ?? ''}
                 onChange={(event) => setSelectedPeriodId(event.target.value)}
               >
-                {periods.map((period) => (
-                  <option key={period.id} value={period.id}>
+                {periods.map((period, index) => (
+                  <option key={`${period.id}-${index}`} value={period.id}>
                     {period.label}
                   </option>
                 ))}
@@ -959,9 +1060,10 @@ function AppContent({ initial, persist, backupCallbacks }: {
               <input
                 type="date"
                 value={newPeriod.startDate}
-                onChange={(event) =>
+                onChange={(event) => {
+                  setPeriodCreationError('');
                   setNewPeriod((prev) => ({ ...prev, startDate: event.target.value }))
-                }
+                }}
               />
             </label>
             <label>
@@ -969,12 +1071,15 @@ function AppContent({ initial, persist, backupCallbacks }: {
               <input
                 type="date"
                 value={newPeriod.endDate}
-                onChange={(event) =>
+                onChange={(event) => {
+                  setPeriodCreationError('');
                   setNewPeriod((prev) => ({ ...prev, endDate: event.target.value }))
-                }
+                }}
               />
             </label>
           </div>
+
+          {periodCreationError && <p role="alert">{periodCreationError}</p>}
 
           <div className="row">
             <button className="primary" onClick={addPeriod}>
@@ -986,6 +1091,7 @@ function AppContent({ initial, persist, backupCallbacks }: {
                 type="month"
                 onChange={(event) => {
                   if (event.target.value) {
+                    setPeriodCreationError('');
                     createHalfMonthPeriod(event.target.value, '1');
                   }
                 }}
@@ -1202,6 +1308,10 @@ function AppContent({ initial, persist, backupCallbacks }: {
             </>
           ) : (
             <div className="quincena-schedule">
+          {periodIntegrityIssues.length > 0 && <div role="alert" className="period-integrity-preview-warning schedule-notice">
+            <p>Conceptos y horas de nómina no disponibles: se ocultan las vistas previas mientras haya conflictos de fechas o períodos. No representan cero horas.</p>
+            <button type="button" className="subtle" onClick={() => setActiveTab('calculo')}>Ver conflictos y opciones de recuperación</button>
+          </div>}
           <div className="legend">
             <div className="legend-group">
               <span className="legend-label">Sedes</span>
@@ -1380,6 +1490,7 @@ function AppContent({ initial, persist, backupCallbacks }: {
                                   ? listTemplatesForDate(branch, date, employee.role)
                                   : [];
                                 const concepts = formatConcepts(shift || undefined);
+                                const conceptsUnavailable = Boolean(shift && periodIntegrityIssues.length > 0);
 
                                 const handleChip = (kind: ShiftKind) => {
                                   if (shift && isShiftReviewNeeded(shift) && !isEmptyShift(shift)) {
@@ -1495,6 +1606,7 @@ function AppContent({ initial, persist, backupCallbacks }: {
                                           </button>
 
                                           <small className="muted">Rango: {formatShiftRange(shift || undefined)}</small>
+                                          {conceptsUnavailable && <small className="review-warning" role="status">Conceptos de nómina no disponibles: revisa la integridad del período.</small>}
                                           {concepts && <small className="muted">Conceptos: {concepts}</small>}
 
                                           <div className="override-menu">
@@ -1555,11 +1667,36 @@ function AppContent({ initial, persist, backupCallbacks }: {
         <section className="panel grid">
           <h2>4. Cálculo</h2>
           {hasPendingBranch && <p role="alert">Hay cambios de sede pendientes. Vuelve a Horarios para asignar el turno o cancelar el cambio; después calcula nuevamente.</p>}
+          {periodIntegrityIssues.length > 0 && <div role="alert">
+            <p>No se puede calcular ni exportar porque hay inconsistencias entre los períodos y las fechas de los turnos:</p>
+            <ul>{periodIntegrityIssues.map((issue, index) => {
+              const shiftRecovery = getShiftIssueRecovery(issue);
+              const backupOnlyIssue = Boolean(shiftRecovery?.backupOnly);
+              const relatedPeriodIds = backupOnlyIssue ? [] : [issue.periodId, issue.relatedPeriodId];
+
+              return <li key={`${issue.code}-${issue.periodId ?? ''}-${issue.shiftId ?? ''}-${index}`}>
+                <p>{issue.message}</p>
+                {shiftRecovery?.canNavigate && <button type="button" className="subtle" onClick={() => openIntegrityWeek(issue.date!, shiftRecovery.storedPeriodId!, shiftRecovery.employeeId!)}>
+                  Ver turno {issue.shiftId} del {issue.date} en Horarios
+                </button>}
+                {backupOnlyIssue && <p role="note">{shiftRecovery?.backupMessage}</p>}
+                {relatedPeriodIds.filter((id, idIndex, ids): id is string => Boolean(id) && ids.indexOf(id) === idIndex).map((id) => (
+                  periods.filter((period) => period.id === id).length === 1 && <button key={id} type="button" className="subtle" onClick={() => openIntegrityPeriod(id)}>Ver período {id} en Dashboard</button>
+                ))}
+              </li>;
+            })}</ul>
+            <p>Horarios permite revisar y editar tramos o sede, pero no cambiar la fecha ni el payPeriodId guardados. Dashboard permite seleccionar o crear períodos, pero no editar ni eliminar los existentes. No se reasignó ni modificó ningún dato; estas vistas no reparan por sí solas el conflicto.</p>
+            <p>Para restaurar datos guardados, usá solo una copia JSON anterior al conflicto que sepas que es válida. En Configuración, seleccioná el archivo, revisá la vista previa y confirmá solo si querés reemplazar los seis valores locales. Si no tenés una copia válida anterior, la aplicación no ofrece una reparación segura para este conflicto; cancelar la restauración no modifica datos.</p>
+            <div className="row">
+              {!hasBackupOnlyShiftRecovery && <button type="button" className="subtle" onClick={() => setActiveTab('dashboard')}>Abrir Dashboard y períodos</button>}
+              <button type="button" className="subtle" onClick={() => setActiveTab('configuracion')}>Abrir Configuración y copias locales</button>
+            </div>
+          </div>}
           {duplicates.length > 0 && <div role="alert"><p>Hay turnos duplicados. Exporta una copia local y contacta a soporte; no se borró ningún registro.</p><ul>{duplicates.map((group) => <li key={buildShiftKey(group[0].employeeId, group[0].payPeriodId, group[0].date)}>{group[0].employeeId} — {group[0].date} — IDs: {group.map((shift) => shift.id).join(', ')}</li>)}</ul></div>}
           {reviewShifts.length > 0 && <div role="alert"><p>Hay turnos pendientes de revisión. No se puede calcular ni exportar hasta definir sus tramos reales en Horarios → Personalizar:</p><ul>{reviewShifts.map((shift) => <li key={shift.id}>
             {employees.find((employee) => employee.id === shift.employeeId)?.fullName ?? shift.employeeId} — {shift.date}
             {endsBeyondSelectedPeriod(shift) && <> — El intervalo {formatShiftRange(shift)} termina más allá del cierre del período ({selectedPeriod?.endDate}); cálculo y exportación bloqueados. No se aplicó un reparto ni se modificó el turno.</>}
-          </li>)}</ul><p>Si un turno no aparece en Horarios, revisa los filtros, la sede y las fechas; si falta el empleado, contacta a soporte sin borrar el registro.</p></div>}
+          </li>)}</ul><p>Si un turno no aparece en Horarios, revisa los filtros, las fechas y el período seleccionado; no borres el registro. Si necesitas recuperar datos guardados, usa solo una copia local anterior que sepas válida desde Configuración.</p></div>}
           <div className="row">
             <button className="primary" onClick={runCalculation} disabled={calculationBlocked}>
               Calcular

@@ -36,7 +36,7 @@ it('serializes both split intervals and the effective branch in a real workbook'
   const period = { id: 'period', companyId: employee.companyId, startDate: '2026-01-05', endDate: '2026-01-05', label: 'Period' };
   const shift: Shift = { id: 's', employeeId: employee.id, payPeriodId: period.id, date: period.startDate,
     startTime: '11:00', endTime: '14:00', secondStart: '18:00', secondEnd: '00:00', breakMinutes: 0, overrideBranchId: 'branch-avenida' };
-  const result = aggregateDailyAndPeriod({ shifts: [shift], employees: [employee], settings: defaultSettings, periodId: period.id, adjustments: {} });
+  const result = aggregateDailyAndPeriod({ shifts: [shift], employees: [employee], settings: defaultSettings, periodId: period.id, period, periods: [period], adjustments: {} });
   const workbook = buildPayrollWorkbook({ period, employees: [employee], branches: seededBranches, shifts: [shift], result });
   const buffer = await workbook.xlsx.writeBuffer();
   const restored = new ExcelJS.Workbook();

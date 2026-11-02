@@ -4,9 +4,11 @@ import {
   Employee,
   EmployeePeriodSummary,
   HourTotals,
+  PayPeriod,
   PayrollSettings,
   Shift
 } from '../types/payroll';
+import { PeriodIntegrityError, validatePayrollPeriodIntegrity } from './periodIntegrity';
 
 interface WorkSegment {
   date: string;
@@ -25,6 +27,8 @@ interface AggregateInput {
   employees: Employee[];
   settings: PayrollSettings;
   periodId: string;
+  period: PayPeriod;
+  periods: readonly PayPeriod[];
   adjustments: Record<string, number>;
 }
 
@@ -328,8 +332,19 @@ export const aggregateDailyAndPeriod = ({
   employees,
   settings,
   periodId,
+  period,
+  periods,
   adjustments
 }: AggregateInput): CalculationResult => {
+  const periodIssues = validatePayrollPeriodIntegrity(period, periods, shifts);
+  if (period.id !== periodId || periodIssues.length > 0) {
+    throw new PeriodIntegrityError(periodIssues.length > 0 ? periodIssues : [{
+      code: 'missing-selected-period',
+      periodId,
+      message: 'El período de cálculo no coincide con el período seleccionado.'
+    }]);
+  }
+
   const activeEmployees = new Map(employees.map((e) => [e.id, e]));
   const dayBreakdowns: CalculationResult['dayBreakdowns'] = [];
   const periodTotals = new Map<string, HourTotals>();

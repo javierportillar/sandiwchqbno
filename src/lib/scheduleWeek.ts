@@ -193,8 +193,9 @@ function resolveDayAssignment(
   const ids = dateShifts.map((shift) => shift.id);
 
   if (periodResolution.status === 'missing') {
+    const storedAssignments = dateShifts.map((shift) => `${shift.id} (payPeriodId ${shift.payPeriodId})`).join(', ');
     const messages = dateShifts.length
-      ? issue('period_missing', 'No hay un período de pago para esta fecha; se conserva cualquier turno existente y no se puede asignar.', date, ids)
+      ? issue('period_missing', `Los turnos ${storedAssignments} del ${date} no tienen un período de pago para esta fecha; se conservan y no se puede asignar.`, date, ids)
       : issue('period_missing', 'No existe un período de pago para esta fecha; no se puede asignar.', date);
     return {
       day: { date, periodResolution, state: 'period-missing', shiftIds: ids, message: messages.message },
@@ -204,7 +205,9 @@ function resolveDayAssignment(
   }
 
   if (periodResolution.status === 'overlap') {
-    const messages = issue('period_overlap', 'Hay períodos de pago superpuestos para esta fecha; no se eligió ninguno y no se puede asignar.', date, ids);
+    const storedAssignments = dateShifts.map((shift) => `${shift.id} (payPeriodId ${shift.payPeriodId})`).join(', ');
+    const affectedShifts = storedAssignments ? ` Los turnos ${storedAssignments} se conservan sin cambios.` : '';
+    const messages = issue('period_overlap', `Hay períodos de pago superpuestos para ${date}; no se eligió ninguno y no se puede asignar.${affectedShifts}`, date, ids);
     return {
       day: { date, periodResolution, state: 'period-overlap', shiftIds: ids, message: messages.message },
       coverageState: 'unassigned',
@@ -215,7 +218,8 @@ function resolveDayAssignment(
   const { period } = periodResolution;
   const mismatched = dateShifts.filter((shift) => shift.payPeriodId !== period.id);
   if (mismatched.length) {
-    const messages = issue('period_mismatch', 'El turno está asociado a otro período de pago; no se modificó y esta fecha no es asignable.', date, ids);
+    const storedAssignments = mismatched.map((shift) => `${shift.id} (payPeriodId ${shift.payPeriodId})`).join(', ');
+    const messages = issue('period_mismatch', `El turno ${storedAssignments} del ${date} está asociado por fecha al período ${period.id}; no se modificó y esta fecha no es asignable.`, date, ids);
     return {
       day: { date, periodResolution, state: 'period-mismatch', shiftIds: ids, message: messages.message },
       coverageState: 'unassigned',
