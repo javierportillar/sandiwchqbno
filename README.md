@@ -47,9 +47,9 @@
 
 | Antes | Después |
 |---|---|
-| El operador ingresaba HH:MM entrada/salida en cuatro inputs pequeños por celda, sin pista visual de sede ni de tipo de turno. | Un click sobre un chip **Partido / Normal / Doblado / Descanso**. El sistema conoce el horario exacto según sede + rol + día de la semana. |
+| El operador ingresaba HH:MM entrada/salida en cuatro inputs pequeños por celda, sin pista visual de sede ni de tipo de turno. | Un click sobre un chip **Partido / Normal / Doblado / Descanso**. El sistema selecciona la franja configurada según sede + rol + día de la semana. |
 | Todas las celdas se veían iguales, en escala de grises azul. Para "ubicar rápido a Laura de Unicentro" había que leer subtítulos. | Cada celda tiene **borde de color por sede** y **chip de color por franja de turno**. Se lee la grilla de un vistazo. |
-| El recargo nocturno arrancaba a las **21:00** en la configuración por defecto, cuando el pptx dice **19:00**. Toda la nómina salía con RN subestimado. | El default queda alineado al pptx (`nocturnalStart: '19:00'`), y hay tests que fijan la regla contra los desgloses del documento oficial. |
+| El recargo nocturno arrancaba a las **21:00** en la configuración por defecto, cuando el pptx dice **19:00**. Toda la nómina salía con RN subestimado. | El default queda alineado al pptx (`nocturnalStart: '19:00'`), y hay tests de regresión para el comportamiento del motor. |
 | La sede "Panamericana" no existe en el negocio real: era placeholder. | Las tres sedes reales quedan cargadas: **Avenida**, **Unicentro**, **Único**, cada una con su catálogo de turnos plantilla. |
 
 **Lo que la app NO hace (por diseño del MVP).**
@@ -120,7 +120,7 @@ Cuando cambie, se agrega convención de ramas (`fase-N-nombre`), se abre PR cont
 
 ## 4 · Reglas de negocio desde el pptx
 
-Estas reglas están en `INVERSIONES CAICEDO BASTIDAS SAS COMPONENTES DE NOMINA.pptx` (slides 2 a 5). Son la fuente única de verdad. Si un cálculo del código las contradice, el bug está en el código.
+Estas reglas están en `INVERSIONES CAICEDO BASTIDAS SAS COMPONENTES DE NOMINA.pptx` (slides 2 a 5). El documento incluye fórmulas y desgloses genéricos; los ejemplos del motor y sus franjas provisionales no constituyen una validación 1:1 contra el PPTX. Las discrepancias requieren revisión antes de usar los resultados para nómina.
 
 ### 4.1 · Trabajo suplementario (fórmula general y tarifas)
 
@@ -137,15 +137,17 @@ Estas reglas están en `INVERSIONES CAICEDO BASTIDAS SAS COMPONENTES DE NOMINA.p
 | Hora Extra Diurna Dominical | `HED_DOM` | 2,05 | 1,25 + 0,80 acumulado. |
 | Hora Extra Nocturna Dominical | `HEN_DOM` | 2,55 | 1,75 + 0,80 acumulado. |
 
-> **Nota sobre "tarifas totales" vs "recargos".** El pptx habla en tarifas totales (`HED = 1,25` → 100% de la hora ordinaria + 25% de recargo). El código maneja únicamente el **recargo** (`0,25`), y suma la hora ordinaria por separado en `ORD`. Matemáticamente equivalente. Cualquier cambio de convención debe pasar por el Revisor.
+> **Nota sobre tarifas y validación de nómina.** El PPTX expresa la hora extra diurna como tarifa total `1,25`. El motor actual calcula `HED` con `0,25` y `HEN` con `0,75`; el subtotal `ORD` es cero y el total mostrado no añade explícitamente el valor base de esas horas. No se ha demostrado la equivalencia con el PPTX ni si algún proceso externo incorpora esa base. Los importes y reglas vigentes requieren validación del responsable de nómina antes de usarse para pagos.
 
-> **Jornada ordinaria = 7h/día — firmado por PO 2026-07-02.** `defaultSettings.dailyOrdinaryHours = 7`. Alinea con los desgloses del pptx: Avenida sala DOBLADO 11-22 = 7 ORD + 1 HED + 3 HEN, Único DOM-JUE DOBLADO 11-21 = 7 ORD + 1 HED + 2 HEN, y análogos. La ley colombiana estándar es 8h/día; el pptx refleja el pacto interno de la empresa. El motor asigna las primeras 7h netas del día a `ORD` (o `RN` si caen después de las 19:00) y el excedente a extras.
+> **Jornada ordinaria configurada = 7h/día.** `defaultSettings.dailyOrdinaryHours = 7`. El motor asigna las primeras 7h netas de cada día a los conceptos ordinarios correspondientes y el excedente a extras; en domingo usa conceptos dominicales. Por ejemplo, con las franjas provisionales, Avenida sala DOBLADO y Único DOM-JUE DOBLADO producen los desgloses de las tablas siguientes en un día no domingo. El PPTX incluye desgloses genéricos, pero estos ejemplos del motor no están validados 1:1 contra ellos.
 
 ### 4.2 · Turnos plantilla por sede
 
-Cada empleado se ubica con un chip de turno. El sistema conoce las horas exactas según sede + día + rol.
+Cada empleado se ubica con un chip de turno. Las duraciones netas fueron contrastadas con el PPTX; las franjas exactas de la tabla y del seed son **provisionales y están pendientes de confirmación**. Las pruebas fijan la configuración actual como referencia de regresión, no como certificación de nómina. Los desgloses siguientes describen el motor para esas franjas, no una reproducción validada 1:1 de los desgloses genéricos del PPTX.
 
 #### Avenida — sala (todos los días)
+
+El desglose corresponde a un día no domingo. En domingo, el motor clasifica las horas con conceptos dominicales.
 
 | Turno | Franja | Desglose esperado |
 |---|---|---|
@@ -154,6 +156,8 @@ Cada empleado se ubica con un chip de turno. El sistema conoce las horas exactas
 | Doblado | 11:00-22:00 | 7 ORD + 1 HED + 3 HEN |
 
 #### Avenida — domiciliarios (todos los días)
+
+El desglose corresponde a un día no domingo. En domingo, el motor clasifica las horas con conceptos dominicales.
 
 | Turno | Franja | Desglose esperado |
 |---|---|---|
@@ -178,6 +182,8 @@ Cada empleado se ubica con un chip de turno. El sistema conoce las horas exactas
 | Doblado | 10:00-22:00 | 7 DOM08 + 2 HED_DOM + 3 HEN_DOM |
 
 #### Único — domingo a jueves
+
+El desglose corresponde a lunes a jueves. En domingo, el motor clasifica las horas con conceptos dominicales.
 
 | Turno | Franja | Desglose esperado |
 |---|---|---|
@@ -219,7 +225,7 @@ La verificación manual end-to-end de la UI (Dashboard → Horarios → Cálculo
 | Selector de rol en Empleados | ✅ Completa | Fase 2.3 (`bc1ad36`). Sala / Domicilio en Avenida. |
 | Paleta por sede + franja + leyenda | ✅ Completa | F3.1 (`2508d1c`) + F3.2 (`9a406ba`). |
 | Vista agrupada por sede + modo pincel + override de sede | ✅ Completa | Fase 4 cerrada en `d158bb0`; la validación automatizada de F5 queda completa. |
-| Tests contra pptx (18 casos: 3 sedes × 3 turnos × dayScopes) | ✅ Completa | Fase 5: 18/18 desgloses verdes contra plantillas seed + motor de cálculo. |
+| Tests de regresión de plantillas y motor (18 casos) | ✅ Completa | Fase 5: 18/18 casos verdes para los desgloses esperados del motor con el seed; no validan clasificación 1:1 contra el PPTX. |
 | Regla "3+ domingos → compensatorio" | ⏳ Roadmap V2 | Fuera de MVP por decisión de PO. |
 
 ---
@@ -250,7 +256,7 @@ Aceptación de PO 2026-07-02 con Opción B: no se hace revert, se completa en Fa
 | ID | Tarea | Commit | DoD |
 |---|---|---|---|
 | **F1.4a** | Agregar en `payroll.ts` los tipos que faltaron en F1.1: `ShiftKind`, `DayScope`, `EmployeeRole`, `ShiftTemplate`, `Branch.shiftTemplates`, `Shift.secondStart?`/`secondEnd?`, `Employee.role?`. | `9a8679a` | ✅ 6 tipos nuevos, sin `any`, `tsc` verde |
-| **F1.4b** | Eliminar `seededTemplates` global y `ShiftTemplateSeed` de `seed.ts`. Poblar `seededBranches[i].shiftTemplates` con las 6 combinaciones exactas de la sección 4.2 del pptx. | `85fc267` → `2274644` (retry) | ✅ 18 plantillas (6 partido + 6 normal + 6 doblado). 1:1 con pptx. |
+| **F1.4b** | Eliminar `seededTemplates` global y `ShiftTemplateSeed` de `seed.ts`. Poblar `seededBranches[i].shiftTemplates` con las 6 combinaciones de sede, rol y día. | `85fc267` → `2274644` (retry) | ✅ 18 plantillas (6 partido + 6 normal + 6 doblado). Franjas provisionales pendientes de confirmación. |
 | **F1.4c** | Migrar `splitShiftIntoSegments` del heurístico a lectura literal de `shift.secondStart`/`shift.secondEnd`. | `3e7a7ff` | ✅ Ruta explícita primero, heurístico como fallback legacy. Test dual (explícito + legacy). |
 | **F1.4d** | Fixes post-auditoría: preload con templates, copy/paste metadata, RN_DOM, audit deps, higiene. | `d3a5e9f` | ✅ `fillDefaultsForPeriod` usa shiftTemplates. `applyCopyToTargets` preserva `templateId`/`secondStart`/`secondEnd`. `classifySegments` emite `RN_DOM`. `npm audit fix`. `.gitignore` actualizado. |
 
@@ -285,11 +291,11 @@ Rediseño firmado por PO tras uso real. Hallazgo clave del Revisor tras F4.1: la
 | **F4.2b** | Pincel + sesión. Barra arriba de la tabla con 4 chips (Partido/Normal/Doblado/Descanso) + "Sin modo" + indicador del modo activo. **Opción A**: con un turno activo, clic en cualquier día lo aplica/sobreescribe (NO abre el mini-selector). Panel "Detalle de la sesión" registra cada asignación con deshacer individual (✕) y "Deshacer todo". Sesión efímera. Eliminar el bloque "Copiar/Pegar turnos" viejo. | Dev Frontend | Revisor | Con "Doblado" activo y clic en 3 días de 2 empleados → 3 asignaciones + 3 entradas en el detalle. ✕ revierte esa celda. Sin pincel, el clic abre el mini-selector de F4.2a. |
 | **F4.3** | Override de sede por día, dentro del mini-selector de F4.2a. Botón "🏢 Cambiar sede" → elegir una de las 3 sedes. Al elegir sede ≠ base, se seta `Shift.overrideBranchId`, se limpia `templateId`, y las plantillas del día + el cálculo usan la sede override. El borde-izquierdo de la fila queda con el color de la sede BASE del empleado; solo un indicador en la celda marca el override. | Dev Frontend | Revisor | Laura (Unicentro) un domingo, override a Único → los turnos ofrecidos pasan a los de Único; el cálculo usa la jornada de Único. Volver a Unicentro limpia el override. |
 
-### Fase 5 · Tests contra el pptx ✅ COMPLETADA
+### Fase 5 · Tests de regresión del motor ✅ COMPLETADA
 
 | ID | Tarea | Responsable | Revisor | DoD |
 |---|---|---|---|---|
-| **F5** | Test suite que valida los 18 desgloses de la sección 4.2. | Revisor (dueño) + Dev Frontend (implementa) | PO | ✅ 18/18 casos verdes contra las plantillas seed y el motor de cálculo. |
+| **F5** | Test suite de regresión para los 18 desgloses del motor con plantillas seed. | Revisor (dueño) + Dev Frontend (implementa) | PO | ✅ 18/18 casos verdes; no certifican equivalencia 1:1 con el PPTX. |
 
 ### Puertas de calidad entre fases
 
@@ -298,7 +304,7 @@ Rediseño firmado por PO tras uso real. Hallazgo clave del Revisor tras F4.1: la
 - **F2 → F3**: Un operador nuevo puede llenar una quincena en < 3 minutos sin abrir "Personalizar".
 - **F3 → F4**: PO aprueba la paleta por escrito.
 - **F4 → F5**: Todos los flujos funcionan con la UI nueva.
-- **F5 → cerrar MVP**: 18/18 casos verdes contra el pptx.
+- **F5 → cerrar MVP**: 18/18 casos de regresión verdes para seed y motor; la equivalencia con el PPTX requiere revisión independiente.
 
 ---
 
@@ -450,12 +456,12 @@ Tipos: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`. **La categoría refle
 - **Jornada ordinaria = 7h/día** (`dailyOrdinaryHours = 7`). Firmado por PO 2026-07-02. El pptx refleja el pacto interno de la empresa, no la jornada legal estándar de 8h. Aplicado en `defaultSettings` y en `applyOrdinaryVsExtra`.
 - **Fase 1 aceptada parcial (Opción B) 2026-07-02.** No se hizo revert de los commits `1a6a61a` + `645fb78` + `3d80827` + `a500c70`. Los faltantes de F1.1 y F1.2 se completaron en Fase 1.4 correctiva (`9a8679a` + `85fc267`→`2274644` + `3e7a7ff`). El motor F1.3 se migró a `secondStart`/`secondEnd` explícitos, el heurístico legacy queda como fallback.
 - **F1.4d (2026-07-02) — Fixes post-auditoría.** `fillDefaultsForPeriod` usa `shiftTemplates` en vez de `defaultStartTime`/`defaultEndTime`. Copy/paste preserva `templateId`, `secondStart`, `secondEnd`. Resuelto `npm audit` safe. Limpieza `.gitignore`.
-- **Domingo nocturno se clasifica como `RN_DOM` (tarifa 1,15) — firmado por PO 2026-07-02.** Antes se emitía `DOM18` (tarifa 1,80) para todo segmento dominical nocturno. La nueva regla en `classifySegments` reserva `DOM18` para tramos dominicales nocturnos que exceden la jornada ordinaria y emite `RN_DOM` para los que caen dentro. Cambia lo que se paga; el pptx sección 4.1 lo tolera (`RN_DOM = 0,35 + 0,80 = 1,15`).
+- **Domingo nocturno se clasifica como `RN_DOM` (tarifa 1,15) — firmado por PO 2026-07-02.** Antes se emitía `DOM18` (tarifa 1,80) para todo segmento dominical nocturno. El motor asigna `RN_DOM` a horas dominicales nocturnas ordinarias y `HEN_DOM` a las extras; `DOM18` no se emite en esa clasificación. Esta implementación no está validada 1:1 contra los desgloses genéricos del PPTX.
 - **Paleta oficial de sedes y turnos — firmada por Revisor con delegación explícita del PO 2026-07-02.** Sedes: Avenida `#DC2626`, Unicentro `#1E40AF`, Único `#15803D`. Turnos: Partido `#D97706`, Normal `#0891B2`, Doblado `#7C3AED`, Descanso `#6B7280`. Todas ≥ 4.5:1 contraste WCAG AA sobre blanco. Ver F3.1 para uso en CSS.
 - **`localStorage` como único backend del MVP.** Migrar a Supabase queda como V2.
 - **Un solo componente `App.tsx` para el MVP.** Rompemos en subcomponentes cuando pase 1000 líneas o el Revisor lo pida.
 - **CSS custom properties, no Tailwind.**
-- **Tests contra el pptx = contrato**. Si el pptx cambia, el revisor actualiza los tests primero (fallan), después el Dev ajusta hasta que pasen.
+- **Tests de referencia = regresión**. Si cambia el PPTX, el revisor debe contrastar sus desgloses y confirmar las franjas antes de actualizar expectativas o el motor.
 
 ### Decisiones abiertas (esperan PO)
 
