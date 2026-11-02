@@ -351,15 +351,37 @@ export function downloadLocalBackup(backup: LocalBackupFile): void {
   }
 }
 
-export function exportLocalBackup(): 'requested' | 'read-failed' | 'download-failed' {
-  let backup: LocalBackupFile;
+export type LocalBackupExportResult =
+  | 'requested'
+  | 'locks-unavailable'
+  | 'lock-failed'
+  | 'read-failed'
+  | 'download-failed';
+
+export async function exportLocalBackup(
+  lockManager: StorageLockManagerLike | null = getStorageLockManager(),
+  storage?: RawStorage
+): Promise<LocalBackupExportResult> {
+  if (!lockManager) return 'locks-unavailable';
+
+  let snapshot: { ok: true; backup: LocalBackupFile } | { ok: false };
   try {
-    backup = createLocalBackup(localStorage);
+    snapshot = await withStorageLock(() => {
+      try {
+        return { ok: true, backup: createLocalBackup(storage ?? localStorage) } as const;
+      } catch {
+        return { ok: false } as const;
+      }
+    }, lockManager);
   } catch {
-    return 'read-failed';
+    return 'lock-failed';
   }
+
+  if (!snapshot || !snapshot.ok) return 'read-failed';
+
   try {
-    downloadLocalBackup(backup);
+    // withStorageLock resolves only after its callback (and the exclusive lock) has finished.
+    downloadLocalBackup(snapshot.backup);
     return 'requested';
   } catch {
     return 'download-failed';

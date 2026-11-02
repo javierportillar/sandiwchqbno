@@ -7,12 +7,19 @@ import {
   restoreLocalBackup,
   runRestoreRecovery
 } from '../lib/localBackup';
-import type { LocalBackupFile, LocalBackupPreview, RestoreJournalRead, RestoreResult } from '../lib/localBackup';
+import type { LocalBackupExportResult, LocalBackupFile, LocalBackupPreview, RestoreJournalRead, RestoreResult } from '../lib/localBackup';
 import { getStorageLockManager } from '../lib/storage';
 
-type BackupStatus = ReturnType<typeof exportLocalBackup> | null;
+type BackupStatus = LocalBackupExportResult | null;
 type PreviewState = { backup: LocalBackupFile; preview: LocalBackupPreview; selectionToken: number };
 type RestoreReason = Extract<RestoreResult, { ok: false }>['reason'];
+
+const EXPORT_MESSAGES: Record<Exclude<LocalBackupExportResult, 'requested'>, string> = {
+  'locks-unavailable': 'Este navegador no ofrece Web Locks. No se generó ni descargó la copia.',
+  'lock-failed': 'No se pudo adquirir el bloqueo exclusivo. No se generó ni descargó la copia; reintentá.',
+  'read-failed': 'No se pudieron leer todas las claves locales; no se generó la copia.',
+  'download-failed': 'No se pudo completar la solicitud de descarga. Comprueba las opciones del navegador.'
+};
 
 const KEY_LABELS: Record<string, string> = {
   'qbano-branches': 'Sedes',
@@ -67,6 +74,7 @@ export function LocalBackup({
   const [fileError, setFileError] = useState<string | null>(null);
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
   const fileInputId = useId();
   const fileInput = useRef<HTMLInputElement>(null);
   const selectionToken = useRef(0);
@@ -146,18 +154,31 @@ export function LocalBackup({
     if (result.reason !== 'locks-unavailable') onRestoreProblem?.(result.reason);
   };
 
+  const exportBackup = async () => {
+    if (exportBusy) return;
+    setExportBusy(true);
+    setStatus(null);
+    try {
+      setStatus(await exportLocalBackup());
+    } catch {
+      setStatus('lock-failed');
+    } finally {
+      setExportBusy(false);
+    }
+  };
+
   return (
     <section className="local-backup" aria-label="Copia de seguridad local">
       <h3>Copia de seguridad local</h3>
       <p>El archivo JSON no está cifrado y contiene datos de empleados y salarios. Guárdalo en un lugar seguro.</p>
       <p>La copia incluye solo lo persistido en este navegador; si falló un guardado, los cambios que solo están en memoria pueden faltar.</p>
       <p>Cerrá las otras pestañas de esta aplicación antes de restaurar, especialmente las abiertas con versiones anteriores.</p>
-      <button className="subtle" type="button" onClick={() => setStatus(exportLocalBackup())}>
-        Exportar copia local (JSON)
+      <button className="subtle" type="button" onClick={() => void exportBackup()} disabled={exportBusy}>
+        {exportBusy ? 'Preparando copia local…' : 'Exportar copia local (JSON)'}
       </button>
+      {exportBusy && <p role="status">Esperando el bloqueo exclusivo para preparar una copia coherente…</p>}
       {status === 'requested' && <p role="status">Se solicitó la descarga. El navegador no puede garantizar que el archivo se haya guardado; compruébalo.</p>}
-      {status === 'read-failed' && <p role="status">No se pudieron leer todas las claves locales; no se generó la copia.</p>}
-      {status === 'download-failed' && <p role="status">No se pudo completar la solicitud de descarga. Comprueba las opciones del navegador.</p>}
+      {status && status !== 'requested' && <p role="alert">{EXPORT_MESSAGES[status]}</p>}
 
       <div className="local-backup-restore">
         <h4>Restaurar desde un archivo JSON</h4>

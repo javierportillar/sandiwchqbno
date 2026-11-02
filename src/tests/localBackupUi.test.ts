@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
 import { LocalBackup } from '../components/LocalBackup';
 import { BACKUP_FORMAT, BACKUP_VERSION } from '../lib/localBackup';
+import { STORAGE_LOCK_NAME } from '../lib/storage';
 import { defaultSettings, seededBranches, seededEmployees, seededPayPeriods, seededShifts } from '../data/seed';
 
 const initial: Record<string, string> = {
@@ -26,7 +27,13 @@ function setup(values = initial, stubDownloadTimer = true) {
   vi.stubGlobal('localStorage', { getItem, setItem, removeItem });
   const createObjectURL = vi.fn((_blob: Blob) => 'blob:backup');
   vi.stubGlobal('URL', { createObjectURL, revokeObjectURL: vi.fn() });
-  if (stubDownloadTimer) vi.spyOn(window, 'setTimeout').mockReturnValue(1 as unknown as ReturnType<typeof window.setTimeout>);
+  if (stubDownloadTimer) {
+    const nativeSetTimeout = window.setTimeout.bind(window);
+    vi.spyOn(window, 'setTimeout').mockImplementation((...args: Parameters<typeof window.setTimeout>) => {
+      if (args[1] === 60_000) return 1 as never;
+      return nativeSetTimeout(...args) as never;
+    });
+  }
   const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
   return { data, getItem, setItem, removeItem, createObjectURL, click };
 }
@@ -82,7 +89,7 @@ describe('backup controls', () => {
     expect(screen.getByText(/solo están en memoria pueden faltar/)).toBeTruthy();
     expect(screen.queryByText(/Se solicitó la descarga/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Exportar copia local (JSON)' }));
-    expect(screen.getByRole('status').textContent).toContain('Se solicitó la descarga');
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Se solicitó la descarga'));
     expect(storage.click).toHaveBeenCalledOnce();
     const backup = JSON.parse(await textOf(storage.createObjectURL.mock.calls[0][0]));
     expect(backup.values['qbano-adjustments']).toBe(initial['qbano-adjustments']);
@@ -99,7 +106,7 @@ describe('backup controls', () => {
     expect(screen.getByRole('alert').textContent).toContain('no se pueden interpretar');
     expect(screen.getByText(/no está cifrado/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Exportar copia local (JSON)' }));
-    expect(screen.getByRole('status').textContent).toContain('Se solicitó');
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Se solicitó'));
     const backup = JSON.parse(await textOf(storage.createObjectURL.mock.calls[0][0]));
     expect(backup.values['qbano-branches']).toBe('{corrupt-private');
     expect(Object.fromEntries(storage.data)).toEqual(values);
@@ -112,7 +119,7 @@ describe('backup controls', () => {
     storage.getItem.mockImplementation(() => { throw new Error('private'); });
     await mount();
     fireEvent.click(screen.getByRole('button', { name: 'Exportar copia local (JSON)' }));
-    expect(screen.getByRole('status').textContent).toContain('no se generó la copia');
+    expect(await screen.findByText(/No se pudieron leer todas las claves locales; no se generó la copia/)).toBeTruthy();
     expect(storage.createObjectURL).not.toHaveBeenCalled();
     expect(storage.setItem).not.toHaveBeenCalled();
   });
@@ -123,9 +130,37 @@ describe('backup controls', () => {
     await mount();
     fireEvent.click(screen.getByRole('button', { name: 'Configuración' }));
     fireEvent.click(screen.getByRole('button', { name: 'Exportar copia local (JSON)' }));
-    expect(screen.getByRole('status').textContent).toContain('No se pudo completar la solicitud de descarga');
+    expect((await screen.findByRole('alert')).textContent).toContain('No se pudo completar la solicitud de descarga');
     expect(screen.queryByText(/Se solicitó la descarga/)).toBeNull();
     expect(storage.setItem).not.toHaveBeenCalled();
+  });
+
+  it('announces missing Web Locks accessibly and does not read or download', async () => {
+    const storage = setup();
+    await mount();
+    storage.getItem.mockClear();
+    vi.stubGlobal('navigator', {});
+    fireEvent.click(screen.getByRole('button', { name: 'Configuración' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Exportar copia local (JSON)' }));
+
+    expect((await screen.findByRole('alert')).textContent).toContain('no ofrece Web Locks');
+    expect(storage.getItem).not.toHaveBeenCalled();
+    expect(storage.createObjectURL).not.toHaveBeenCalled();
+  });
+
+  it('announces lock request failure accessibly and does not read or download', async () => {
+    const storage = setup();
+    await mount();
+    storage.getItem.mockClear();
+    const request = vi.fn(async () => { throw new Error('lock denied'); });
+    vi.stubGlobal('navigator', { locks: { request } });
+    fireEvent.click(screen.getByRole('button', { name: 'Configuración' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Exportar copia local (JSON)' }));
+
+    expect((await screen.findByRole('alert')).textContent).toContain('No se pudo adquirir el bloqueo exclusivo');
+    expect(request).toHaveBeenCalledWith(STORAGE_LOCK_NAME, { mode: 'exclusive' }, expect.any(Function));
+    expect(storage.getItem).not.toHaveBeenCalled();
+    expect(storage.createObjectURL).not.toHaveBeenCalled();
   });
 
   it('exports persisted values, not an edit that failed to save', async () => {
@@ -137,6 +172,7 @@ describe('backup controls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Crear empleado' }));
     expect(screen.getByRole('alert').textContent).toContain('No se puede asegurar');
     fireEvent.click(screen.getByRole('button', { name: 'Exportar copia local (JSON)' }));
+    expect(await screen.findByText(/Se solicitó la descarga/)).toBeTruthy();
     const backup = JSON.parse(await textOf(storage.createObjectURL.mock.calls[0][0]));
     expect(backup.values['qbano-employees']).toBe(initial['qbano-employees']);
     expect(JSON.stringify(backup)).not.toContain('Unsaved User');
