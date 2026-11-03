@@ -28,6 +28,7 @@ import type { RestoreJournalRead, RestoreResult } from './lib/localBackup';
 import { ShiftEditor } from './components/ShiftEditor';
 import { WeekNavigator } from './components/WeekNavigator';
 import { WeekSchedule } from './components/WeekSchedule';
+import { PeriodCalendar } from './components/PeriodCalendar';
 import type { EmployeeWeekActions } from './components/EmployeeWeekCard';
 import { duplicateShiftGroups, endsBeyondPeriodEnd, isEmptyShift, needsShiftReview, normalTemplateForEmployee, templateFields } from './lib/shiftSafety';
 import type { StorageReadError, StorageSnapshot } from './lib/storage';
@@ -48,6 +49,7 @@ import {
 } from './lib/scheduleWeek';
 import type { EmployeeWeekDay } from './lib/scheduleWeek';
 import { buildWeeklyLoadPlan, weeklyLoadPlansMatch, type WeeklyLoadPlan } from './lib/weeklyBulkLoad';
+import { getCurrentCalendarMonth } from './lib/periodCalendar';
 
 const TABS: Array<{ id: AppTab; label: string }> = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -443,10 +445,6 @@ function AppContent({ initial, persist, backupCallbacks }: {
     habitualShiftKind: '' as ScheduledShiftKind | ''
   });
 
-  const [newPeriod, setNewPeriod] = useState({
-    startDate: '',
-    endDate: ''
-  });
   const [periodCreationError, setPeriodCreationError] = useState('');
 
   const [customizingCells, setCustomizingCells] = useState<Record<string, boolean>>({});
@@ -854,45 +852,20 @@ function AppContent({ initial, persist, backupCallbacks }: {
     );
   };
 
-  const saveNewPeriod = (period: PayPeriod, clearCustomInputs = false) => {
+  const saveNewPeriod = (period: PayPeriod): boolean => {
     const issues = validatePayPeriodRange(period, periods);
     if (issues.length > 0) {
       setPeriodCreationError(`${issues.map((issue) => issue.message).join(' ')} El período no se creó.`);
-      return;
+      return false;
     }
 
     setPeriodCreationError('');
     setPeriods((prev) => [period, ...prev]);
     setSelectedPeriodId(period.id);
-    if (clearCustomInputs) setNewPeriod({ startDate: '', endDate: '' });
+    return true;
   };
 
-  const addPeriod = () => {
-    if (!newPeriod.startDate || !newPeriod.endDate) {
-      setPeriodCreationError('Ingresá una fecha de inicio y una fecha de fin para crear el período.');
-      return;
-    }
-    const period: PayPeriod = {
-      id: uid('period'),
-      companyId: seededCompany.id,
-      startDate: newPeriod.startDate,
-      endDate: newPeriod.endDate,
-      label: buildPeriodLabel(newPeriod.startDate, newPeriod.endDate)
-    };
-    saveNewPeriod(period, true);
-  };
-
-  const createHalfMonthPeriod = (yearMonth: string, half: '1' | '2') => {
-    if (!yearMonth) {
-      return;
-    }
-    const [year, month] = yearMonth.split('-').map(Number);
-    const lastDay = new Date(year, month, 0).getDate();
-    const startDate = `${year}-${String(month).padStart(2, '0')}-${half === '1' ? '01' : '16'}`;
-    const endDate = `${year}-${String(month).padStart(2, '0')}-${String(
-      half === '1' ? 15 : lastDay
-    ).padStart(2, '0')}`;
-
+  const createPeriodRange = (startDate: string, endDate: string): boolean => {
     const period: PayPeriod = {
       id: uid('period'),
       companyId: seededCompany.id,
@@ -900,8 +873,7 @@ function AppContent({ initial, persist, backupCallbacks }: {
       endDate,
       label: buildPeriodLabel(startDate, endDate)
     };
-
-    saveNewPeriod(period);
+    return saveNewPeriod(period);
   };
 
   const applyBrush = (employee: Employee, date: string) => {
@@ -1101,61 +1073,13 @@ function AppContent({ initial, persist, backupCallbacks }: {
             </label>
           </div>
 
-          <div className="grid grid-2">
-            <label>
-              Nuevo periodo: inicio
-              <input
-                type="date"
-                value={newPeriod.startDate}
-                onChange={(event) => {
-                  setPeriodCreationError('');
-                  setNewPeriod((prev) => ({ ...prev, startDate: event.target.value }))
-                }}
-              />
-            </label>
-            <label>
-              Nuevo periodo: fin
-              <input
-                type="date"
-                value={newPeriod.endDate}
-                onChange={(event) => {
-                  setPeriodCreationError('');
-                  setNewPeriod((prev) => ({ ...prev, endDate: event.target.value }))
-                }}
-              />
-            </label>
-          </div>
-
-          {periodCreationError && <p role="alert">{periodCreationError}</p>}
-
-          <div className="row">
-            <button className="primary" onClick={addPeriod}>
-              Crear periodo personalizado
-            </button>
-            <label>
-              Crear quincena rápida
-              <input
-                type="month"
-                onChange={(event) => {
-                  if (event.target.value) {
-                    setPeriodCreationError('');
-                    createHalfMonthPeriod(event.target.value, '1');
-                  }
-                }}
-              />
-            </label>
-            <button
-              className="subtle"
-              onClick={() => {
-                const monthInput = prompt('Mes en formato YYYY-MM (ej: 2026-02)');
-                if (monthInput) {
-                  createHalfMonthPeriod(monthInput, '2');
-                }
-              }}
-            >
-              Crear segunda quincena (16-fin)
-            </button>
-          </div>
+          <PeriodCalendar
+            periods={periods}
+            initialMonth={isCivilDate(selectedPeriod?.startDate) ? selectedPeriod.startDate.slice(0, 7) : getCurrentCalendarMonth()}
+            creationError={periodCreationError}
+            onCreatePeriod={createPeriodRange}
+            onClearError={() => setPeriodCreationError('')}
+          />
 
           <small className="muted">
             Empleados activos visibles: {filteredEmployees.length} | Días del periodo: {periodDates.length}

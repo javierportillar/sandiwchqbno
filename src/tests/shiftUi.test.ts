@@ -27,6 +27,15 @@ async function mount() {
   });
   await act(async () => { render(createElement(StrictMode, null, createElement(App))); });
 }
+function selectPeriodCalendarDate(date: string) {
+  const button = document.querySelector(`button[data-calendar-date="${date}"]`);
+  if (!(button instanceof HTMLButtonElement)) throw new Error(`Missing period calendar date ${date}`);
+  fireEvent.click(button);
+}
+function selectPeriodCalendarRange(startDate: string, endDate: string) {
+  selectPeriodCalendarDate(startDate);
+  selectPeriodCalendarDate(endDate);
+}
 function openSchedule() {
   fireEvent.click(screen.getByRole('button', { name: 'Horarios' }));
   fireEvent.click(screen.getByRole('button', { name: 'Quincena y pincel' }));
@@ -166,15 +175,43 @@ describe('safe schedule editing', () => {
     const store = setup([]);
     const originalPeriods = store.data.get('qbano-periods');
     await mount();
-    fireEvent.change(screen.getByLabelText('Nuevo periodo: inicio'), { target: { value: '2026-01-05' } });
-    fireEvent.change(screen.getByLabelText('Nuevo periodo: fin'), { target: { value: '2026-01-20' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Crear periodo personalizado' }));
+    selectPeriodCalendarRange('2026-01-05', '2026-01-20');
 
     expect(screen.getByRole('alert').textContent).toContain('se superpone');
-    expect(screen.getByRole('alert').textContent).toContain('El período no se creó');
     expect(screen.getByRole('alert').textContent).toContain('2026-01-05 a 2026-01-20');
+    expect((screen.getByRole('button', { name: 'Crear período' }) as HTMLButtonElement).disabled).toBe(true);
     expect(store.data.get('qbano-periods')).toBe(originalPeriods);
     expect(store.setItem).not.toHaveBeenCalled();
+  });
+
+  it('creates a custom dashboard period only after the explicit calendar create action', async () => {
+    const store = setup([]);
+    const originalPeriods = store.data.get('qbano-periods');
+    await mount();
+    selectPeriodCalendarRange('2026-01-16', '2026-01-20');
+
+    expect(store.data.get('qbano-periods')).toBe(originalPeriods);
+    fireEvent.click(screen.getByRole('button', { name: 'Crear período' }));
+
+    const savedPeriods = JSON.parse(store.data.get('qbano-periods') ?? '[]') as Array<{ id: string; startDate: string; endDate: string }>;
+    expect(savedPeriods[0]).toMatchObject({ startDate: '2026-01-16', endDate: '2026-01-20' });
+    expect((screen.getByLabelText('Periodo de pago') as HTMLSelectElement).value).toBe(savedPeriods[0].id);
+  });
+
+  it('creates both quick quincenas after navigating to a free month', async () => {
+    const december = { ...period, id: 'december', startDate: '2025-12-01', endDate: '2025-12-15', label: 'December first half' };
+    const store = setup([], employee, december, [december]);
+    await mount();
+    fireEvent.click(screen.getByRole('button', { name: 'Mes siguiente' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Crear primera quincena' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Crear segunda quincena' }));
+
+    const savedPeriods = JSON.parse(store.data.get('qbano-periods') ?? '[]') as Array<{ startDate: string; endDate: string }>;
+    expect(savedPeriods.map(({ startDate, endDate }) => [startDate, endDate]))
+      .toContainEqual(['2026-01-01', '2026-01-15']);
+    expect(savedPeriods.map(({ startDate, endDate }) => [startDate, endDate]))
+      .toContainEqual(['2026-01-16', '2026-01-31']);
   });
 
   it('does not persist or select a new period when its generated ID already exists', async () => {
@@ -183,9 +220,9 @@ describe('safe schedule editing', () => {
     const originalPeriods = store.data.get('qbano-periods');
     vi.stubGlobal('crypto', { randomUUID: vi.fn(() => '12345678-0000-4000-8000-000000000000') });
     await mount();
-    fireEvent.change(screen.getByLabelText('Nuevo periodo: inicio'), { target: { value: '2026-02-01' } });
-    fireEvent.change(screen.getByLabelText('Nuevo periodo: fin'), { target: { value: '2026-02-15' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Crear periodo personalizado' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mes siguiente' }));
+    selectPeriodCalendarRange('2026-02-01', '2026-02-15');
+    fireEvent.click(screen.getByRole('button', { name: 'Crear período' }));
 
     expect(screen.getByRole('alert').textContent).toContain('Ya existe un período con el identificador period-12345678');
     expect(screen.getByRole('alert').textContent).toContain('El período no se creó');
@@ -195,28 +232,19 @@ describe('safe schedule editing', () => {
   });
 
   it.each(['first-half', 'second-half'] as const)(
-    'does not persist or select an overlapping %s quick period and announces the error',
+    'shows an overlapping %s quick period as blocked without persisting it',
     async (half) => {
-      const firstHalf = { ...period, id: 'first-half', startDate: '2026-01-01', endDate: '2026-01-15', label: 'Jan 1–15' };
-      const secondHalf = { ...period, id: 'second-half', startDate: '2026-01-16', endDate: '2026-01-31', label: 'Jan 16–31' };
-      const periods = [firstHalf, secondHalf];
-      const store = setup([], employee, firstHalf, periods);
+      const overlappingPeriod = { ...period, id: 'overlap', startDate: '2026-01-10', endDate: '2026-01-20', label: 'Overlapping range' };
+      const store = setup([], employee, overlappingPeriod, [overlappingPeriod]);
       const originalPeriods = store.data.get('qbano-periods');
-      vi.stubGlobal('prompt', vi.fn(() => '2026-01'));
       await mount();
+      const label = half === 'first-half' ? 'primera quincena' : 'segunda quincena';
+      const quickAction = screen.getByRole('button', { name: `Bloqueada por conflicto ${label}` }) as HTMLButtonElement;
 
-      if (half === 'first-half') {
-        fireEvent.change(screen.getByLabelText('Crear quincena rápida'), { target: { value: '2026-01' } });
-      } else {
-        fireEvent.click(screen.getByRole('button', { name: 'Crear segunda quincena (16-fin)' }));
-      }
-
-      const error = screen.getByRole('alert');
-      expect(error.textContent).toContain('se superponen');
-      expect(error.textContent).toContain(half === 'first-half' ? '2026-01-01 a 2026-01-15' : '2026-01-16 a 2026-01-31');
-      expect(error.textContent).toContain('El período no se creó');
+      expect(quickAction.disabled).toBe(true);
+      expect(screen.getAllByText('Se superpone con un período guardado.')).toHaveLength(2);
       expect(store.data.get('qbano-periods')).toBe(originalPeriods);
-      expect((screen.getByLabelText('Periodo de pago') as HTMLSelectElement).value).toBe(firstHalf.id);
+      expect((screen.getByLabelText('Periodo de pago') as HTMLSelectElement).value).toBe(overlappingPeriod.id);
       expect(store.setItem).not.toHaveBeenCalled();
     }
   );
