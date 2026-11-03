@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { seededBranches, seededEmployees } from '../data/seed';
 import { buildEmployeeWeekSchedule } from '../lib/scheduleWeek';
-import { buildWeeklyLoadPlan } from '../lib/weeklyBulkLoad';
+import { buildWeeklyLoadPlan, weeklyLoadPlansMatch } from '../lib/weeklyBulkLoad';
 import type { PayPeriod, Shift } from '../types/payroll';
 
 const employee = { ...seededEmployees[0], id: 'bulk-employee', branchId: 'branch-unicentro' };
@@ -52,7 +52,66 @@ describe('weekly bulk load planning', () => {
 
     expect(plan.assignments).toHaveLength(5);
     expect(plan.assignments.some((item) => item.date === '2026-01-13' || item.date === '2026-01-14')).toBe(false);
-    expect(plan.skipped.filter((item) => item.reason === 'existing-assignment')).toHaveLength(2);
+    expect(plan.skipped.filter((item) => item.reason === 'existing-assignment')).toHaveLength(1);
+    expect(plan.skipped).toContainEqual({ date: '2026-01-13', reason: 'day-off-preserved' });
+  });
+
+  it('replaces valid scheduled shifts and fills empty dates in one explicit batch', () => {
+    const existing: Shift = {
+      id: 'replace-me', employeeId: employee.id, payPeriodId: firstPeriod.id,
+      date: '2026-01-14', startTime: '10:00', endTime: '14:00', breakMinutes: 0
+    };
+    const dayOff: Shift = {
+      id: 'keep-free', employeeId: employee.id, payPeriodId: firstPeriod.id,
+      date: '2026-01-13', restDay: true, breakMinutes: 0
+    };
+    const plan = buildWeeklyLoadPlan({
+      schedule: makeSchedule([firstPeriod, secondPeriod], [existing, dayOff]),
+      branches: seededBranches,
+      kind: 'normal',
+      branchId: employee.branchId,
+      mode: 'replace-scheduled'
+    });
+
+    expect(plan.assignments).toHaveLength(6);
+    expect(plan.assignments.filter((item) => item.replaces)).toHaveLength(1);
+    expect(plan.assignments.find((item) => item.date === existing.date)).toMatchObject({
+      replaces: existing,
+      template: { id: 'unicentro-ls-normal' }
+    });
+    expect(plan.assignments.some((item) => item.date === dayOff.date)).toBe(false);
+    expect(plan.skipped).toContainEqual({ date: dayOff.date, reason: 'day-off-preserved' });
+  });
+
+  it('rejects a reviewed plan if the schedule changed before apply', () => {
+    const existing: Shift = {
+      id: 'shift-before-preview', employeeId: employee.id, payPeriodId: firstPeriod.id,
+      date: '2026-01-14', startTime: '10:00', endTime: '14:00', breakMinutes: 0
+    };
+    const reviewed = buildWeeklyLoadPlan({
+      schedule: makeSchedule([firstPeriod, secondPeriod], [existing]),
+      branches: seededBranches,
+      kind: 'partido',
+      branchId: employee.branchId,
+      mode: 'replace-scheduled'
+    });
+    const unchanged = buildWeeklyLoadPlan({
+      schedule: makeSchedule([firstPeriod, secondPeriod], [existing]),
+      branches: seededBranches,
+      kind: 'partido',
+      branchId: employee.branchId,
+      mode: 'replace-scheduled'
+    });
+    const changed = buildWeeklyLoadPlan({
+      schedule: makeSchedule([firstPeriod, secondPeriod], [{ ...existing, startTime: '11:00' }]),
+      branches: seededBranches,
+      kind: 'partido',
+      branchId: employee.branchId,
+      mode: 'replace-scheduled'
+    });
+
+    expect(weeklyLoadPlansMatch(reviewed, unchanged)).toBe(true);
+    expect(weeklyLoadPlansMatch(reviewed, changed)).toBe(false);
   });
 
   it('skips missing and overlapping periods rather than guessing a period', () => {
@@ -60,11 +119,11 @@ describe('weekly bulk load planning', () => {
       { ...firstPeriod, endDate: '2026-01-14' },
       { ...secondPeriod, startDate: '2026-01-17' }
     ];
-    const gapPlan = buildWeeklyLoadPlan({ schedule: makeSchedule(gapPeriods), branches: seededBranches, kind: 'normal', branchId: employee.branchId });
+    const gapPlan = buildWeeklyLoadPlan({ schedule: makeSchedule(gapPeriods), branches: seededBranches, kind: 'normal', branchId: employee.branchId, mode: 'replace-scheduled' });
     expect(gapPlan.skipped.filter((item) => item.reason === 'period-missing').map((item) => item.date)).toEqual(['2026-01-15', '2026-01-16']);
 
     const overlap = { ...secondPeriod, id: 'overlap', startDate: '2026-01-15', endDate: '2026-01-17' };
-    const overlapPlan = buildWeeklyLoadPlan({ schedule: makeSchedule([firstPeriod, secondPeriod, overlap]), branches: seededBranches, kind: 'normal', branchId: employee.branchId });
+    const overlapPlan = buildWeeklyLoadPlan({ schedule: makeSchedule([firstPeriod, secondPeriod, overlap]), branches: seededBranches, kind: 'normal', branchId: employee.branchId, mode: 'replace-scheduled' });
     expect(overlapPlan.skipped.filter((item) => item.reason === 'period-overlap').map((item) => item.date)).toEqual(['2026-01-15', '2026-01-16', '2026-01-17']);
   });
 
@@ -80,6 +139,7 @@ describe('weekly bulk load planning', () => {
       branches: noSundayBranch,
       kind: 'normal',
       branchId: employee.branchId,
+      mode: 'replace-scheduled',
       pendingBranches: { [pendingKey]: 'branch-avenida' }
     });
 
@@ -109,10 +169,25 @@ describe('weekly bulk load planning', () => {
       schedule: makeSchedule([firstPeriod, secondPeriod], [mismatch, duplicateA, duplicateB]),
       branches: seededBranches,
       kind: 'normal',
-      branchId: employee.branchId
+      branchId: employee.branchId,
+      mode: 'replace-scheduled'
     });
     expect(guardedPlan.skipped).toContainEqual({ date: '2026-01-15', reason: 'period-mismatch' });
     expect(guardedPlan.skipped).toContainEqual({ date: '2026-01-17', reason: 'duplicate' });
     expect(guardedPlan.assignments.some((item) => item.date === '2026-01-15' || item.date === '2026-01-17')).toBe(false);
+
+    const reviewShift: Shift = {
+      id: 'review', employeeId: employee.id, payPeriodId: firstPeriod.id,
+      date: '2026-01-12', startTime: '09:00', endTime: '12:00', breakMinutes: 15
+    };
+    const reviewPlan = buildWeeklyLoadPlan({
+      schedule: makeSchedule([firstPeriod, secondPeriod], [reviewShift]),
+      branches: seededBranches,
+      kind: 'normal',
+      branchId: employee.branchId,
+      mode: 'replace-scheduled'
+    });
+    expect(reviewPlan.skipped).toContainEqual({ date: '2026-01-12', reason: 'review' });
+    expect(reviewPlan.assignments.some((item) => item.date === '2026-01-12')).toBe(false);
   });
 });

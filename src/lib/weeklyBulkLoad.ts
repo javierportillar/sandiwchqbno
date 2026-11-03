@@ -1,4 +1,4 @@
-import type { Branch, Employee, ScheduledShiftKind, ShiftTemplate } from '../types/payroll';
+import type { Branch, Employee, ScheduledShiftKind, Shift, ShiftTemplate } from '../types/payroll';
 import type { EmployeeWeekSchedule } from './scheduleWeek';
 import { resolveTemplateForDate } from './templates';
 import { buildScheduleCellKey } from './scheduleWeek';
@@ -8,7 +8,10 @@ export interface WeeklyLoadAssignment {
   payPeriodId: string;
   branchId: string;
   template: ShiftTemplate;
+  replaces?: Shift;
 }
+
+export type WeeklyLoadMode = 'fill-unassigned' | 'replace-scheduled';
 
 export type WeeklyLoadSkipReason =
   | 'existing-assignment'
@@ -18,6 +21,7 @@ export type WeeklyLoadSkipReason =
   | 'period-mismatch'
   | 'duplicate'
   | 'review'
+  | 'day-off-preserved'
   | 'branch-unavailable'
   | 'template-unavailable';
 
@@ -31,6 +35,7 @@ export interface WeeklyLoadPlan {
   weekStartDate: string;
   kind: ScheduledShiftKind;
   branchId: string;
+  mode: WeeklyLoadMode;
   assignments: WeeklyLoadAssignment[];
   skipped: WeeklyLoadSkip[];
 }
@@ -40,9 +45,10 @@ export function buildWeeklyLoadPlan(input: {
   branches: readonly Branch[];
   kind: ScheduledShiftKind;
   branchId: string;
+  mode?: WeeklyLoadMode;
   pendingBranches?: Readonly<Record<string, string>>;
 }): WeeklyLoadPlan {
-  const { schedule, branches, kind, branchId, pendingBranches = {} } = input;
+  const { schedule, branches, kind, branchId, mode = 'fill-unassigned', pendingBranches = {} } = input;
   const employee: Employee = schedule.employee;
   const branch = branches.find((candidate) => candidate.id === branchId);
   const assignments: WeeklyLoadAssignment[] = [];
@@ -72,7 +78,15 @@ export function buildWeeklyLoadPlan(input: {
       pushSkip('review');
       continue;
     }
-    if (day.shiftIds.length > 0 || day.state === 'scheduled' || day.state === 'day-off') {
+    if (day.state === 'day-off') {
+      pushSkip('day-off-preserved');
+      continue;
+    }
+    const replacement = mode === 'replace-scheduled' && day.state === 'scheduled' &&
+      day.shiftIds.length === 1 && day.shift?.id === day.shiftIds[0]
+      ? day.shift
+      : undefined;
+    if (!replacement && (day.shiftIds.length > 0 || day.state === 'scheduled')) {
       pushSkip('existing-assignment');
       continue;
     }
@@ -95,7 +109,13 @@ export function buildWeeklyLoadPlan(input: {
       pushSkip('template-unavailable');
       continue;
     }
-    assignments.push({ date: day.date, payPeriodId: period.id, branchId, template });
+    assignments.push({
+      date: day.date,
+      payPeriodId: period.id,
+      branchId,
+      template,
+      ...(replacement ? { replaces: replacement } : {})
+    });
   }
 
   return {
@@ -103,7 +123,13 @@ export function buildWeeklyLoadPlan(input: {
     weekStartDate: schedule.week.startDate,
     kind,
     branchId,
+    mode,
     assignments,
     skipped
   };
+}
+
+/** Compare a user-reviewed plan with a freshly generated one before applying it. */
+export function weeklyLoadPlansMatch(reviewed: WeeklyLoadPlan, current: WeeklyLoadPlan): boolean {
+  return JSON.stringify(reviewed) === JSON.stringify(current);
 }

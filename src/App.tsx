@@ -47,7 +47,7 @@ import {
   isCivilDate
 } from './lib/scheduleWeek';
 import type { EmployeeWeekDay } from './lib/scheduleWeek';
-import { buildWeeklyLoadPlan } from './lib/weeklyBulkLoad';
+import { buildWeeklyLoadPlan, weeklyLoadPlansMatch, type WeeklyLoadPlan } from './lib/weeklyBulkLoad';
 
 const TABS: Array<{ id: AppTab; label: string }> = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -815,22 +815,41 @@ function AppContent({ initial, persist, backupCallbacks }: {
     setNewEmployee((prev) => ({ ...prev, fullName: '', documentId: '', role: '', habitualShiftKind: '' }));
   };
 
-  const applyWeeklyLoad = (employee: Employee, kind: ScheduledShiftKind, branchId: string) => {
+  const applyWeeklyLoad = (employee: Employee, reviewedPlan: WeeklyLoadPlan) => {
     const schedule = allEmployeeWeekSchedules.find((item) => item.employee.id === employee.id);
     if (!schedule) return;
-    const plan = buildWeeklyLoadPlan({ schedule, branches, kind, branchId, pendingBranches });
+    const plan = buildWeeklyLoadPlan({
+      schedule,
+      branches,
+      kind: reviewedPlan.kind,
+      branchId: reviewedPlan.branchId,
+      mode: reviewedPlan.mode,
+      pendingBranches
+    });
+    if (!weeklyLoadPlansMatch(reviewedPlan, plan)) {
+      setScheduleNotice(`La semana de ${employee.fullName} cambió después de la vista previa. No se aplicó ningún cambio; revisá la carga nuevamente.`);
+      return;
+    }
     let applied = 0;
+    let replaced = 0;
+    let added = 0;
     for (const assignment of plan.assignments) {
       const saved = upsertShiftForPeriod(employee.id, assignment.payPeriodId, assignment.date, {
         ...templateFields(assignment.template),
         overrideBranchId: assignment.branchId === employee.branchId ? undefined : assignment.branchId
       });
-      if (saved) applied += 1;
+      if (saved) {
+        applied += 1;
+        if (assignment.replaces) replaced += 1;
+        else added += 1;
+      }
     }
     const omitted = plan.skipped.length + (plan.assignments.length - applied);
     setScheduleNotice(
       applied > 0
-        ? `Carga aplicada a ${employee.fullName}: ${applied} turno(s) para la semana ${plan.weekStartDate}. Se omitieron ${omitted} día(s); los registros existentes y los días libres se conservaron.`
+        ? plan.mode === 'replace-scheduled'
+          ? `Carga aplicada a ${employee.fullName}: ${replaced} turno(s) reemplazado(s) y ${added} nuevo(s) para la semana ${plan.weekStartDate}. Se omitieron ${omitted} día(s); los días libres explícitos se conservaron.`
+          : `Carga aplicada a ${employee.fullName}: ${applied} turno(s) asignado(s) para la semana ${plan.weekStartDate}. Se omitieron ${omitted} día(s); los turnos existentes y los días libres explícitos se conservaron.`
         : `No se aplicaron turnos a ${employee.fullName}: no hay días seguros disponibles para la semana ${plan.weekStartDate}.`
     );
   };

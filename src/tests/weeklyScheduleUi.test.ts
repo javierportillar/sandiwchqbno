@@ -194,6 +194,48 @@ describe('week-first schedule interface', () => {
     expect(await screen.findByText(/Carga aplicada a Test Employee/)).toBeTruthy();
   });
 
+  it('requires explicit replace mode and confirms before replacing scheduled days', async () => {
+    const dayOff = makeShift('protected-free-day', '2026-01-13', firstHalf.id, {
+      restDay: true, startTime: undefined, endTime: undefined
+    });
+    const existing = makeShift('replace-this-shift', '2026-01-14', firstHalf.id, {
+      startTime: '10:00', endTime: '14:00'
+    });
+    const store = setup([dayOff, existing], [firstHalf, secondHalf], [{ ...employee, habitualShiftKind: 'normal' }]);
+    await mount();
+    openWeekSchedule();
+
+    fireEvent.click(screen.getByRole('radio', { name: /Reemplazar turnos existentes/ }));
+    fireEvent.change(screen.getByLabelText('Sede de destino para turnos nuevos y reemplazados'), {
+      target: { value: 'branch-avenida' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Revisar carga semanal' }));
+
+    expect(screen.getByText('Se reemplazarán 1 turno(s) y se asignarán 5 día(s) vacío(s); se omitirán 1.')).toBeTruthy();
+    expect(screen.getAllByText('10:00–14:00').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Después')).toHaveLength(6);
+    const replacedPreviewRow = Array.from(document.querySelectorAll<HTMLElement>('.weekly-load-change'))
+      .find((row) => row.textContent?.includes('10:00–14:00'));
+    expect(replacedPreviewRow?.textContent).toContain('Sede: Unicentro');
+    expect(replacedPreviewRow?.textContent).toContain('Sede: Avenida');
+    expect(store.data.get('qbano-shifts')).toContain('replace-this-shift');
+    expect(JSON.parse(store.data.get('qbano-shifts')!)).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar reemplazo de 1 turno(s) y asignar 5' }));
+    await waitFor(() => expect(JSON.parse(store.data.get('qbano-shifts')!).length).toBe(7));
+
+    const records = JSON.parse(store.data.get('qbano-shifts')!) as Shift[];
+    expect(records.find((shift) => shift.id === dayOff.id)).toEqual(dayOff);
+    expect(records.find((shift) => shift.id === existing.id)).toMatchObject({
+      startTime: '14:00', endTime: '22:00', templateId: 'avenida-sala-normal', overrideBranchId: 'branch-avenida'
+    });
+    expect(records.filter((shift) => shift.date === '2026-01-14')).toHaveLength(1);
+    expect(records.find((shift) => shift.date === '2026-01-15')).toMatchObject({
+      templateId: 'avenida-sala-normal', overrideBranchId: 'branch-avenida'
+    });
+    expect(await screen.findByText(/1 turno\(s\) reemplazado\(s\)/)).toBeTruthy();
+  });
+
   it('persists an employee habitual shift and exposes it as a suggestion rather than assigning it', async () => {
     const store = setup([], [firstHalf, secondHalf], [employee]);
     await mount();

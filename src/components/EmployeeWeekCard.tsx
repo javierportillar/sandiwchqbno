@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Branch, Employee, ScheduledShiftKind, Shift, ShiftTemplate } from '../types/payroll';
 import type { EmployeeWeekDay, EmployeeWeekSchedule } from '../lib/scheduleWeek';
 import { buildScheduleCellKey } from '../lib/scheduleWeek';
-import { buildWeeklyLoadPlan, type WeeklyLoadPlan } from '../lib/weeklyBulkLoad';
+import { buildWeeklyLoadPlan, type WeeklyLoadMode, type WeeklyLoadPlan } from '../lib/weeklyBulkLoad';
 import { WeekDayAssignment } from './WeekDayAssignment';
 
 export interface EmployeeWeekActions {
@@ -13,7 +13,7 @@ export interface EmployeeWeekActions {
   onAssignDayOff: (employee: Employee, day: EmployeeWeekDay, branchId: string) => void;
   onToggleCustom: (employee: Employee, day: EmployeeWeekDay, cellKey: string) => void;
   onSaveCustom: (employee: Employee, day: EmployeeWeekDay, branchId: string, patch: Partial<Shift>) => void;
-  onApplyWeeklyLoad: (employee: Employee, kind: ScheduledShiftKind, branchId: string) => void;
+  onApplyWeeklyLoad: (employee: Employee, plan: WeeklyLoadPlan) => void;
 }
 
 function formatAssignedHours(minutes: number): string {
@@ -48,13 +48,14 @@ const KIND_LABEL: Record<ScheduledShiftKind, string> = {
 };
 
 const SKIP_LABEL: Record<WeeklyLoadPlan['skipped'][number]['reason'], string> = {
-  'existing-assignment': 'Ya tiene un turno o un día libre; se conserva.',
+  'existing-assignment': 'Ya tiene un turno; se conserva.',
   'pending-branch': 'Tiene un cambio de sede pendiente.',
   'period-missing': 'No hay período de pago para esa fecha.',
   'period-overlap': 'Hay períodos de pago superpuestos.',
   'period-mismatch': 'El turno guardado no coincide con el período de la fecha.',
   duplicate: 'Hay turnos duplicados que requieren revisión.',
   review: 'El turno existente requiere revisión.',
+  'day-off-preserved': 'Día libre explícito; se conserva sin cambios.',
   'branch-unavailable': 'La sede elegida no está disponible.',
   'template-unavailable': 'No hay una plantilla compatible para ese día, sede y rol.'
 };
@@ -64,6 +65,15 @@ function formatTemplateRange(template: ShiftTemplate): string {
   return template.secondStart && template.secondEnd
     ? `${first} · ${template.secondStart}–${template.secondEnd}`
     : first;
+}
+
+function formatShiftRange(shift: Shift): string {
+  const first = shift.startTime && shift.endTime ? `${shift.startTime}–${shift.endTime}` : 'Turno asignado';
+  return shift.secondStart && shift.secondEnd ? `${first} · ${shift.secondStart}–${shift.secondEnd}` : first;
+}
+
+function formatBranchName(branches: readonly Branch[], branchId: string): string {
+  return branches.find((branch) => branch.id === branchId)?.name ?? 'Sede no disponible';
 }
 
 function formatDate(date: string): string {
@@ -96,6 +106,7 @@ export function EmployeeWeekCard({
   const coverageLabel = calculation.coverageStatus === 'confirmed' ? 'Cobertura confirmada' : 'Cobertura incompleta';
   const [loadKind, setLoadKind] = useState<ScheduledShiftKind | ''>(employee.habitualShiftKind ?? '');
   const [loadBranchId, setLoadBranchId] = useState(employee.branchId);
+  const [loadMode, setLoadMode] = useState<WeeklyLoadMode>('fill-unassigned');
   const [loadPreview, setLoadPreview] = useState<WeeklyLoadPlan | null>(null);
 
   useEffect(() => {
@@ -111,9 +122,13 @@ export function EmployeeWeekCard({
       branches,
       kind: loadKind,
       branchId: loadBranchId,
+      mode: loadMode,
       pendingBranches
     }));
   };
+
+  const replacementCount = loadPreview?.assignments.filter((item) => item.replaces).length ?? 0;
+  const newAssignmentCount = (loadPreview?.assignments.length ?? 0) - replacementCount;
 
   return (
     <article className="employee-week-card">
@@ -164,15 +179,40 @@ export function EmployeeWeekCard({
       <section className="weekly-load-panel" aria-label={`Carga semanal para ${employee.fullName}`}>
         <div className="weekly-load-heading">
           <div>
-            <h5>Cargar turno en días disponibles</h5>
+            <h5>Aplicar un tipo de turno a la semana</h5>
             <p>
               {employee.habitualShiftKind
                 ? `Turno habitual sugerido: ${KIND_LABEL[employee.habitualShiftKind]}.`
                 : 'No hay un turno habitual configurado; elegí uno para esta carga.'}
-              {' '}La sugerencia no asigna turnos por sí sola.
+              {' '}La sugerencia no asigna turnos por sí sola. Los días libres explícitos siempre se conservan.
             </p>
           </div>
         </div>
+        <fieldset className="weekly-load-mode">
+          <legend>Qué hacer con los turnos de esta semana</legend>
+          <div className="weekly-load-mode-options">
+            <label>
+              <input
+                type="radio"
+                name={`weekly-load-mode-${employee.id}`}
+                value="fill-unassigned"
+                checked={loadMode === 'fill-unassigned'}
+                onChange={() => { setLoadMode('fill-unassigned'); setLoadPreview(null); }}
+              />
+              <span><strong>Completar días sin turno</strong><small>Conserva los turnos ya asignados.</small></span>
+            </label>
+            <label>
+              <input
+                type="radio"
+                name={`weekly-load-mode-${employee.id}`}
+                value="replace-scheduled"
+                checked={loadMode === 'replace-scheduled'}
+                onChange={() => { setLoadMode('replace-scheduled'); setLoadPreview(null); }}
+              />
+              <span><strong>Reemplazar turnos existentes</strong><small>Solo reemplaza turnos válidos; muestra el antes y después.</small></span>
+            </label>
+          </div>
+        </fieldset>
         <div className="weekly-load-controls">
           <label>
             Tipo de turno
@@ -185,7 +225,7 @@ export function EmployeeWeekCard({
             </select>
           </label>
           <label>
-            Sede para los nuevos turnos
+            Sede de destino para turnos nuevos y reemplazados
             <select value={loadBranchId} onChange={(event) => {
               setLoadBranchId(event.target.value);
               setLoadPreview(null);
@@ -201,16 +241,32 @@ export function EmployeeWeekCard({
           <div className="weekly-load-preview" role="status" aria-live="polite">
             <strong>
               {loadPreview.assignments.length
-                ? `Se asignarán ${loadPreview.assignments.length} día(s); se omitirán ${loadPreview.skipped.length}.`
+                ? loadPreview.mode === 'replace-scheduled'
+                  ? `Se reemplazarán ${replacementCount} turno(s) y se asignarán ${newAssignmentCount} día(s) vacío(s); se omitirán ${loadPreview.skipped.length}.`
+                  : `Se asignarán ${loadPreview.assignments.length} día(s); se omitirán ${loadPreview.skipped.length}.`
                 : `No hay días disponibles para asignar; se omitirán ${loadPreview.skipped.length}.`}
             </strong>
             {loadPreview.assignments.length > 0 && (
               <ul className="weekly-load-list">
                 {loadPreview.assignments.map((item) => (
-                  <li key={item.date}>
+                  <li key={item.date} className="weekly-load-change">
                     <span>{formatDate(item.date)}</span>
-                    <span>{item.template.label}</span>
-                    <span>{formatTemplateRange(item.template)}</span>
+                    <span className="weekly-load-before">
+                      <small>Antes</small>
+                      <span>{item.replaces ? formatShiftRange(item.replaces) : 'Sin asignar'}</span>
+                      {item.replaces && (
+                        <small className="weekly-load-location">
+                          Sede: {formatBranchName(branches, item.replaces.overrideBranchId ?? employee.branchId)}
+                        </small>
+                      )}
+                    </span>
+                    <span className="weekly-load-arrow" aria-hidden="true">→</span>
+                    <span className="weekly-load-after">
+                      <small>Después</small>
+                      <span>{item.template.label}</span>
+                      <span>{formatTemplateRange(item.template)}</span>
+                      <small className="weekly-load-location">Sede: {formatBranchName(branches, item.branchId)}</small>
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -234,11 +290,15 @@ export function EmployeeWeekCard({
                 className="primary"
                 disabled={loadPreview.assignments.length === 0}
                 onClick={() => {
-                  if (loadKind) actions.onApplyWeeklyLoad(employee, loadKind, loadBranchId);
+                  actions.onApplyWeeklyLoad(employee, loadPreview);
                   setLoadPreview(null);
                 }}
               >
-                Confirmar y aplicar {loadPreview.assignments.length} turno(s)
+                {loadPreview.mode === 'replace-scheduled'
+                  ? replacementCount > 0
+                    ? `Confirmar reemplazo de ${replacementCount} turno(s) y asignar ${newAssignmentCount}`
+                    : `Confirmar y aplicar ${newAssignmentCount} turno(s)`
+                  : `Confirmar y aplicar ${loadPreview.assignments.length} turno(s)`}
               </button>
               <button type="button" className="subtle" onClick={() => setLoadPreview(null)}>Cancelar</button>
             </div>
