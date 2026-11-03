@@ -623,6 +623,96 @@ small.muted {
   min-width: 0;
 }
 
+.calculation-scope-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr));
+  gap: 14px;
+  min-width: 0;
+}
+
+.calculation-scope-card {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 15px;
+  border: 1px solid #dce5f2;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #fffdf8, #f8fbff);
+}
+
+.calculation-period-field,
+.calculation-period-select {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.calculation-scope-card h3 {
+  color: #14213d;
+}
+
+.scope-eyebrow {
+  color: #84611a;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.scope-date-range {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+  min-width: 0;
+  max-width: 100%;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.scope-date-range span,
+.calculation-scope-card > small,
+.weekly-hours-note {
+  color: #5c6b83;
+  font-size: 0.82rem;
+}
+
+.calculation-week-card .week-navigator {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-width: 0;
+  width: 100%;
+  margin-top: 2px;
+}
+
+.calculation-week-card .week-range {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.calculation-week-card .week-nav-button {
+  justify-self: stretch;
+  min-width: 0;
+}
+
+.week-calculation-table-wrap {
+  max-height: 320px;
+  overflow: auto;
+}
+
+.week-calculation-table-wrap th,
+.week-calculation-table-wrap td {
+  white-space: nowrap;
+}
+
+.week-calculation-table-wrap td:first-child {
+  white-space: normal;
+}
+
 .week-schedule-status {
   display: flex;
   flex-wrap: wrap;
@@ -745,6 +835,81 @@ small.muted {
   border-radius: 14px;
   background: #fff;
   box-shadow: 0 5px 16px rgba(20, 33, 61, 0.06);
+}
+
+.weekly-load-panel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #ead7a7;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #fffaf0, #fffdf8);
+}
+
+.weekly-load-heading h5 {
+  color: #65480c;
+  font-size: 0.9rem;
+}
+
+.weekly-load-heading p {
+  margin-top: 3px;
+  color: #6c6251;
+  font-size: 0.78rem;
+}
+
+.weekly-load-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+  align-items: end;
+  gap: 8px;
+}
+
+.weekly-load-controls button {
+  min-height: 40px;
+}
+
+.weekly-load-preview {
+  display: grid;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid #d9e3ef;
+  border-radius: 9px;
+  background: #fff;
+  color: #34445f;
+  font-size: 0.82rem;
+}
+
+.weekly-load-list {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.weekly-load-list li {
+  display: grid;
+  grid-template-columns: minmax(105px, 0.8fr) minmax(100px, 1fr) minmax(115px, 1fr);
+  gap: 6px 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid #edf1f5;
+  font-variant-numeric: tabular-nums;
+}
+
+.weekly-load-skipped li {
+  grid-template-columns: minmax(105px, 0.6fr) minmax(0, 2fr);
+}
+
+.weekly-load-preview summary {
+  width: fit-content;
+  color: #18304b;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.weekly-load-actions {
+  justify-content: flex-end;
 }
 
 .employee-week-card-header {
@@ -1019,6 +1184,26 @@ small.muted {
 }
 
 @media (max-width: 768px) {
+  .calculation-scope-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .week-calculation-table-wrap {
+    max-height: 260px;
+  }
+
+  .weekly-load-list li {
+    grid-template-columns: minmax(90px, 0.8fr) minmax(0, 1fr);
+  }
+
+  .weekly-load-list li span:last-child:nth-child(3) {
+    grid-column: 2;
+  }
+
+  .weekly-load-skipped li {
+    grid-template-columns: minmax(90px, 0.8fr) minmax(0, 1fr);
+  }
+
   .week-navigator {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }

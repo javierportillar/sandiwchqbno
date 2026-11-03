@@ -1,6 +1,7 @@
 export type BranchName = 'Unicentro' | 'Único' | 'Avenida';
 
 export type ShiftKind = 'partido' | 'normal' | 'doblado' | 'descanso';
+export type ScheduledShiftKind = Exclude<ShiftKind, 'descanso'>;
 
 export type DayScope =
   | 'all'
@@ -48,6 +49,7 @@ export interface Employee {
   baseMonthlySalary: number;
   active: boolean;
   role?: EmployeeRole;
+  habitualShiftKind?: ScheduledShiftKind;
 }
 
 export interface PayPeriod {

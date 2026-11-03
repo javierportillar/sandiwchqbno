@@ -159,6 +159,85 @@ describe('week-first schedule interface', () => {
     expect(screen.queryByRole('button', { name: 'Asignar turno a Test Employee, 2026-01-15' })).toBeNull();
   });
 
+  it('reviews a weekly load before applying it, preserves existing work and days off, and resolves crossed pay periods', async () => {
+    const dayOff = makeShift('protected-day-off', '2026-01-13', firstHalf.id, {
+      restDay: true, startTime: undefined, endTime: undefined
+    });
+    const existing = makeShift('protected-shift', '2026-01-14', firstHalf.id, {
+      startTime: '10:00', endTime: '14:00'
+    });
+    const store = setup([dayOff, existing], [firstHalf, secondHalf], [{ ...employee, habitualShiftKind: 'normal' }]);
+    await mount();
+    openWeekSchedule();
+
+    expect((screen.getByLabelText('Tipo de turno') as HTMLSelectElement).value).toBe('normal');
+    fireEvent.click(screen.getByRole('button', { name: 'Revisar carga semanal' }));
+    expect(screen.getByText('Se asignarán 5 día(s); se omitirán 2.')).toBeTruthy();
+    expect(screen.queryByText(/No hay período de pago/)).toBeNull();
+    expect(store.data.get('qbano-shifts')).toContain('protected-day-off');
+    expect(JSON.parse(store.data.get('qbano-shifts')!)).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar y aplicar 5 turno(s)' }));
+    await waitFor(() => expect(JSON.parse(store.data.get('qbano-shifts')!).length).toBe(7));
+    const records = JSON.parse(store.data.get('qbano-shifts')!) as Shift[];
+    expect(records.find((shift) => shift.id === dayOff.id)).toEqual(dayOff);
+    expect(records.find((shift) => shift.id === existing.id)).toEqual(existing);
+    expect(records.find((shift) => shift.date === '2026-01-15')).toMatchObject({
+      payPeriodId: firstHalf.id, templateId: 'unicentro-ls-normal'
+    });
+    expect(records.find((shift) => shift.date === '2026-01-16')).toMatchObject({
+      payPeriodId: secondHalf.id, templateId: 'unicentro-ls-normal'
+    });
+    expect(records.find((shift) => shift.date === '2026-01-18')).toMatchObject({
+      payPeriodId: secondHalf.id, templateId: 'unicentro-dom-normal'
+    });
+    expect(await screen.findByText(/Carga aplicada a Test Employee/)).toBeTruthy();
+  });
+
+  it('persists an employee habitual shift and exposes it as a suggestion rather than assigning it', async () => {
+    const store = setup([], [firstHalf, secondHalf], [employee]);
+    await mount();
+    fireEvent.click(screen.getByRole('button', { name: 'Empleados' }));
+    fireEvent.change(screen.getByLabelText('Turno habitual de Test Employee'), { target: { value: 'partido' } });
+
+    await waitFor(() => {
+      const savedEmployees = JSON.parse(store.data.get('qbano-employees')!) as Employee[];
+      expect(savedEmployees[0].habitualShiftKind).toBe('partido');
+    });
+    expect(JSON.parse(store.data.get('qbano-shifts')!)).toHaveLength(0);
+  });
+
+  it('makes the reviewed week selectable in Cálculo without coupling it to the payroll period', async () => {
+    setup([
+      makeShift('week-anchor', '2026-01-15', firstHalf.id),
+      makeShift('next-week-shift', '2026-01-20', secondHalf.id, { startTime: '09:00', endTime: '14:00' })
+    ]);
+    await mount();
+    fireEvent.click(screen.getByRole('button', { name: 'Cálculo' }));
+
+    const payrollPeriod = screen.getByLabelText('Período de nómina a calcular') as HTMLSelectElement;
+    const weekNavigation = screen.getByRole('navigation', { name: 'Semana revisada en Cálculo' });
+    const weeklyHours = document.querySelector('.week-calculation-table-wrap') as HTMLElement;
+    expect(payrollPeriod.value).toBe(firstHalf.id);
+    expect(within(weekNavigation).getByText('2026-01-19 — 2026-01-25')).toBeTruthy();
+    expect(within(weeklyHours).getByText('5 h 00 min')).toBeTruthy();
+
+    fireEvent.change(payrollPeriod, { target: { value: secondHalf.id } });
+    expect(payrollPeriod.value).toBe(secondHalf.id);
+    expect(within(weekNavigation).getByText('2026-01-19 — 2026-01-25')).toBeTruthy();
+    expect(within(weeklyHours).getByText('5 h 00 min')).toBeTruthy();
+
+    fireEvent.click(within(weekNavigation).getByRole('button', { name: /^Semana anterior/ }));
+    expect(within(weekNavigation).getByText('2026-01-12 — 2026-01-18')).toBeTruthy();
+    expect(within(weeklyHours).getByText('3 h 00 min')).toBeTruthy();
+    expect(payrollPeriod.value).toBe(secondHalf.id);
+
+    fireEvent.change(payrollPeriod, { target: { value: firstHalf.id } });
+    expect(payrollPeriod.value).toBe(firstHalf.id);
+    expect(within(weekNavigation).getByText('2026-01-12 — 2026-01-18')).toBeTruthy();
+    expect(within(weeklyHours).getByText('3 h 00 min')).toBeTruthy();
+  });
+
   it('keeps week and quincena/brush modes available', async () => {
     setup([makeShift('anchor', '2026-01-15', firstHalf.id)]);
     await mount();

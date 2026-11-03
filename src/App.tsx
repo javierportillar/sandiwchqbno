@@ -8,6 +8,7 @@ import {
   HourTotals,
   PayPeriod,
   PayrollSettings,
+  ScheduledShiftKind,
   Shift,
   ShiftKind,
   ShiftTemplate
@@ -46,6 +47,7 @@ import {
   isCivilDate
 } from './lib/scheduleWeek';
 import type { EmployeeWeekDay } from './lib/scheduleWeek';
+import { buildWeeklyLoadPlan } from './lib/weeklyBulkLoad';
 
 const TABS: Array<{ id: AppTab; label: string }> = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -108,6 +110,9 @@ const dayLabel = (dateISO: string) => {
     month: '2-digit'
   }).format(date);
 };
+
+const formatScheduledMinutes = (minutes: number) =>
+  `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')} min`;
 
 const buildPeriodLabel = (startDate: string, endDate: string) => `${startDate} a ${endDate}`;
 
@@ -434,7 +439,8 @@ function AppContent({ initial, persist, backupCallbacks }: {
     documentId: '',
     branchId: branches[0]?.id ?? '',
     baseMonthlySalary: 1600000,
-    role: '' as string
+    role: '' as string,
+    habitualShiftKind: '' as ScheduledShiftKind | ''
   });
 
   const [newPeriod, setNewPeriod] = useState({
@@ -801,11 +807,32 @@ function AppContent({ initial, persist, backupCallbacks }: {
       documentId: newEmployee.documentId.trim() || undefined,
       baseMonthlySalary: Number(newEmployee.baseMonthlySalary),
       active: true,
-      role: (newEmployee.role as EmployeeRole) || undefined
+      role: (newEmployee.role as EmployeeRole) || undefined,
+      habitualShiftKind: newEmployee.habitualShiftKind || undefined
     };
 
     setEmployees((prev) => [...prev, employee]);
-    setNewEmployee((prev) => ({ ...prev, fullName: '', documentId: '', role: '' }));
+    setNewEmployee((prev) => ({ ...prev, fullName: '', documentId: '', role: '', habitualShiftKind: '' }));
+  };
+
+  const applyWeeklyLoad = (employee: Employee, kind: ScheduledShiftKind, branchId: string) => {
+    const schedule = allEmployeeWeekSchedules.find((item) => item.employee.id === employee.id);
+    if (!schedule) return;
+    const plan = buildWeeklyLoadPlan({ schedule, branches, kind, branchId, pendingBranches });
+    let applied = 0;
+    for (const assignment of plan.assignments) {
+      const saved = upsertShiftForPeriod(employee.id, assignment.payPeriodId, assignment.date, {
+        ...templateFields(assignment.template),
+        overrideBranchId: assignment.branchId === employee.branchId ? undefined : assignment.branchId
+      });
+      if (saved) applied += 1;
+    }
+    const omitted = plan.skipped.length + (plan.assignments.length - applied);
+    setScheduleNotice(
+      applied > 0
+        ? `Carga aplicada a ${employee.fullName}: ${applied} turno(s) para la semana ${plan.weekStartDate}. Se omitieron ${omitted} día(s); los registros existentes y los días libres se conservaron.`
+        : `No se aplicaron turnos a ${employee.fullName}: no hay días seguros disponibles para la semana ${plan.weekStartDate}.`
+    );
   };
 
   const saveNewPeriod = (period: PayPeriod, clearCustomInputs = false) => {
@@ -1000,7 +1027,8 @@ function AppContent({ initial, persist, backupCallbacks }: {
     onAssignTemplate: (employee, day, branchId, template) => assignWeekTemplate(employee, day, branchId, template),
     onAssignDayOff: (employee, day, branchId) => assignWeekDayOff(employee, day, branchId),
     onToggleCustom: (employee, day) => toggleWeekCustom(employee, day),
-    onSaveCustom: (employee, day, branchId, patch) => saveWeekCustom(employee, day, branchId, patch)
+    onSaveCustom: (employee, day, branchId, patch) => saveWeekCustom(employee, day, branchId, patch),
+    onApplyWeeklyLoad: applyWeeklyLoad
   };
 
   return (
@@ -1182,6 +1210,22 @@ function AppContent({ initial, persist, backupCallbacks }: {
                 </select>
               </label>
             )}
+            <label>
+              Turno habitual (opcional)
+              <select
+                value={newEmployee.habitualShiftKind}
+                onChange={(event) => setNewEmployee((prev) => ({
+                  ...prev,
+                  habitualShiftKind: event.target.value as ScheduledShiftKind | ''
+                }))}
+              >
+                <option value="">Sin definir</option>
+                <option value="normal">Normal</option>
+                <option value="partido">Partido</option>
+                <option value="doblado">Doblado</option>
+              </select>
+              <small className="muted">Es una sugerencia; no asigna turnos automáticamente.</small>
+            </label>
           </div>
           <div className="row">
             <button className="primary" onClick={addEmployee}>
@@ -1197,6 +1241,7 @@ function AppContent({ initial, persist, backupCallbacks }: {
                   <th>Documento</th>
                   <th>Sede</th>
                   <th>Rol</th>
+                  <th>Turno habitual</th>
                   <th>Básico</th>
                   <th>Estado</th>
                 </tr>
@@ -1228,6 +1273,24 @@ function AppContent({ initial, persist, backupCallbacks }: {
                       ) : (
                         <span className="muted">—</span>
                       )}
+                    </td>
+                    <td>
+                      <select
+                        aria-label={`Turno habitual de ${employee.fullName}`}
+                        value={employee.habitualShiftKind ?? ''}
+                        onChange={(event) => {
+                          const habitualShiftKind = (event.target.value as ScheduledShiftKind | '') || undefined;
+                          setEmployees((prev) => prev.map((item) => item.id === employee.id
+                            ? { ...item, habitualShiftKind }
+                            : item));
+                          setCalculation(null);
+                        }}
+                      >
+                        <option value="">Sin definir</option>
+                        <option value="normal">Normal</option>
+                        <option value="partido">Partido</option>
+                        <option value="doblado">Doblado</option>
+                      </select>
                     </td>
                     <td>{pesos(employee.baseMonthlySalary)}</td>
                     <td>
@@ -1666,6 +1729,69 @@ function AppContent({ initial, persist, backupCallbacks }: {
       {activeTab === 'calculo' && (
         <section className="panel grid">
           <h2>4. Cálculo</h2>
+          <div className="calculation-scope-grid">
+            <section className="calculation-scope-card" aria-labelledby="calculation-period-title">
+              <p className="scope-eyebrow">Cálculo de nómina</p>
+              <h3 id="calculation-period-title">Período de pago</h3>
+              <label className="calculation-period-field">
+                Período de nómina a calcular
+                <select
+                  className="calculation-period-select"
+                  aria-label="Período de nómina a calcular"
+                  value={selectedPeriod?.id ?? ''}
+                  onChange={(event) => {
+                    setSelectedPeriodId(event.target.value);
+                    setCalculation(null);
+                  }}
+                  disabled={periods.length === 0}
+                >
+                  {periods.map((period) => (
+                    <option key={period.id} value={period.id}>
+                      {period.label} · {period.startDate} — {period.endDate}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {selectedPeriod
+                ? <p className="scope-date-range"><strong>{selectedPeriod.startDate} — {selectedPeriod.endDate}</strong><span>{selectedPeriod.label}</span></p>
+                : <p className="muted">No hay períodos de nómina configurados.</p>}
+              <small>La nómina se calcula para este período; no necesariamente coincide con la semana de horarios.</small>
+            </section>
+
+            <section className="calculation-scope-card calculation-week-card" aria-labelledby="calculation-week-title">
+              <p className="scope-eyebrow">Revisión de programación</p>
+              <h3 id="calculation-week-title">Semana de horarios</h3>
+              <WeekNavigator
+                weekStart={weekStartDate}
+                onChange={setWeekStartDate}
+                ariaLabel="Semana revisada en Cálculo"
+              />
+              <p className="weekly-hours-note">Horas programadas brutas de lunes a domingo. No son horas trabajadas ni pagadas y no descuentan pausas.</p>
+              <div className="table-wrap week-calculation-table-wrap">
+                <table>
+                  <thead>
+                    <tr><th>Empleado</th><th>Sede</th><th>Horas programadas</th><th>Estado</th></tr>
+                  </thead>
+                  <tbody>
+                    {allEmployeeWeekSchedules.map((schedule) => (
+                      <tr key={schedule.employee.id}>
+                        <td>{schedule.employee.fullName}{!schedule.employee.active ? ' · Inactivo' : ''}</td>
+                        <td>{branchesMap.get(schedule.employee.branchId)?.name ?? '—'}</td>
+                        <td>{formatScheduledMinutes(schedule.calculation.assignedMinutes)}</td>
+                        <td>
+                          {schedule.issues.length > 0 || schedule.calculation.coverageStatus !== 'confirmed'
+                            ? 'Incompleta / revisar'
+                            : 'Completa'}
+                        </td>
+                      </tr>
+                    ))}
+                    {allEmployeeWeekSchedules.length === 0 && <tr><td colSpan={4}>No hay empleados configurados.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+              <small>La semana es la misma que se muestra en Horarios. Cambiarla no cambia el período de nómina.</small>
+            </section>
+          </div>
           {hasPendingBranch && <p role="alert">Hay cambios de sede pendientes. Vuelve a Horarios para asignar el turno o cancelar el cambio; después calcula nuevamente.</p>}
           {periodIntegrityIssues.length > 0 && <div role="alert">
             <p>No se puede calcular ni exportar porque hay inconsistencias entre los períodos y las fechas de los turnos:</p>

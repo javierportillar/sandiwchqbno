@@ -7,17 +7,19 @@ function formatDate(date: string, options: Intl.DateTimeFormatOptions): string {
 
 export function WeekNavigator({
   weekStart,
-  onChange
+  onChange,
+  ariaLabel = 'Navegación de semanas'
 }: {
   weekStart: string;
   onChange: (nextWeekStart: string) => void;
+  ariaLabel?: string;
 }) {
   const weekEnd = addDaysToDate(weekStart, 6);
   const todayWeekStart = getMondayWeekStart(getLocalTodayISO());
   const rangeLabel = `${formatDate(weekStart, { day: '2-digit', month: 'short' })} — ${formatDate(weekEnd, { day: '2-digit', month: 'short', year: 'numeric' })}`;
 
   return (
-    <nav className="week-navigator" aria-label="Navegación de semanas">
+    <nav className="week-navigator" aria-label={ariaLabel}>
       <button
         type="button"
         className="subtle week-nav-button"
