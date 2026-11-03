@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { PayPeriod } from '../types/payroll';
 import type { PeriodIntegrityIssue } from '../lib/periodIntegrity';
 import {
+  classifyPayPeriod,
   formatCalendarDate,
   formatCalendarMonth,
   getCalendarMonth,
@@ -34,7 +35,6 @@ interface QuickAction {
 }
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-const COLOR_NAMES = ['green', 'gold', 'red', 'blue', 'teal', 'slate'] as const;
 
 const fullDateLabel = (date: string) => formatCalendarDate(date, {
   weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
@@ -63,11 +63,12 @@ export function PeriodCalendar({ periods, initialMonth, creationError, onCreateP
 
   const periodRows = useMemo(() => periods.map((period, index) => {
     const issues = getExistingPeriodIssues(period, index, periods);
+    const classification = classifyPayPeriod(period);
     return {
       period,
       index,
-      code: `P${index + 1}`,
-      color: COLOR_NAMES[index % COLOR_NAMES.length],
+      classification,
+      ...classification,
       issues,
       valid: isValidPeriodDateRange(period)
     };
@@ -161,7 +162,7 @@ export function PeriodCalendar({ periods, initialMonth, creationError, onCreateP
                       const dayHasConflict = activePeriods.length > 1 || activePeriods.some(({ issues }) => issues.length > 0);
                       const dateDescription = [
                         fullDateLabel(date),
-                        ...activePeriods.map(({ period }) => `${period.label}: ${fullDateLabel(period.startDate)} a ${fullDateLabel(period.endDate)}`),
+                        ...activePeriods.map(({ period, classification }) => `${classification.label}. ${period.label}: ${fullDateLabel(period.startDate)} a ${fullDateLabel(period.endDate)}`),
                         selectedStart ? 'Inicio seleccionado' : '',
                         selectedEnd ? 'Fin seleccionado' : '',
                         dayHasConflict ? 'Conflicto o período ambiguo; revisar' : ''
@@ -179,12 +180,12 @@ export function PeriodCalendar({ periods, initialMonth, creationError, onCreateP
                           >
                             <span className="period-day-number">{Number(date.slice(-2))}</span>
                             <span className="period-day-markers" aria-hidden="true">
-                              {activePeriods.map(({ code, color, period }) => {
+                              {activePeriods.map(({ index, classification, period }) => {
                                 const isStart = period.startDate === date;
                                 const isEnd = period.endDate === date;
                                 const label = isStart && isEnd ? 'Inicio y fin' : isStart ? 'Inicio' : isEnd ? 'Fin' : 'Activo';
                                 const marker = isStart && isEnd ? 'I/F' : isStart ? 'I' : isEnd ? 'F' : '•';
-                                return <span key={`${period.id}-${code}`} className={`period-day-marker marker-${color}`} title={`${label} · ${code}`}>{marker} · {code}</span>;
+                                return <span key={`${period.id}-${index}`} className={`period-day-marker marker-${classification.color}`} title={`${classification.label} · ${label}`}>{marker}</span>;
                               })}
                               {dayHasConflict && <span className="period-conflict-marker">! Cruce</span>}
                               {selectedStart && <span className="selected-range-marker">I</span>}
@@ -201,8 +202,19 @@ export function PeriodCalendar({ periods, initialMonth, creationError, onCreateP
           </div>
 
           <div className="period-calendar-legend" aria-label="Leyenda del calendario">
-            <span><i className="legend-swatch" aria-hidden="true" /> Colores y códigos identifican cada rango</span>
-            <span><b>I</b> inicio · <b>F</b> fin · <b>•</b> rango activo</span>
+            <span className="period-legend-entry">
+              <i className="legend-swatch legend-period-1" aria-hidden="true" />
+              <strong>Período 1</strong><small>Del 1 al 15 de cada mes</small>
+            </span>
+            <span className="period-legend-entry">
+              <i className="legend-swatch legend-period-2" aria-hidden="true" />
+              <strong>Período 2</strong><small>Del 16 al último día del mes</small>
+            </span>
+            <span className="period-legend-entry">
+              <i className="legend-swatch legend-period-custom" aria-hidden="true" />
+              <strong>Rango personalizado</strong><small>Otro rango de fechas</small>
+            </span>
+            <span className="period-marker-guide"><b>I</b> inicio · <b>F</b> fin · <b>•</b> rango activo</span>
             <span><b>! Cruce</b> indica fechas que requieren revisión</span>
             <span className="period-weekend-note">Sábado y domingo se muestran atenuados, no se omiten. En móvil, desliza la grilla para ver los siete días.</span>
           </div>
@@ -216,14 +228,14 @@ export function PeriodCalendar({ periods, initialMonth, creationError, onCreateP
               <p className="period-empty-note">No hay rangos guardados en este mes.</p>
             ) : (
               <ul className="period-range-list">
-                {visiblePeriodRows.map(({ period, code, color, issues, valid, index }) => {
+                {visiblePeriodRows.map(({ period, classification, color, issues, valid, index }) => {
                   const continuesBefore = valid && period.startDate < calendar.startDate;
                   const continuesAfter = valid && period.endDate > calendar.endDate;
                   return (
                     <li key={`${period.id}-${index}`} className={`period-range-item range-${color}${issues.length ? ' range-conflict' : ''}`}>
-                      <span className="period-range-code" aria-hidden="true">{code}</span>
                       <div className="period-range-details">
-                        <strong>{period.label || `Período ${code}`}</strong>
+                        <span className={`period-range-category category-${classification.kind}`}>{classification.label}</span>
+                        <strong>{period.label || classification.label}</strong>
                         <span className="period-range-endpoints">
                           <span><b>Inicio:</b> {formatCalendarDate(period.startDate, { day: '2-digit', month: 'long', year: 'numeric' })}</span>
                           <span><b>Fin:</b> {formatCalendarDate(period.endDate, { day: '2-digit', month: 'long', year: 'numeric' })}</span>

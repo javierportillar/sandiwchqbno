@@ -1660,16 +1660,24 @@ input:focus-visible {
 .period-calendar-day.selected-start .period-day-number, .period-calendar-day.selected-end .period-day-number { background: #fca311; color: #14213d; }
 .period-calendar-cell.has-period-conflict { box-shadow: inset 0 0 0 2px #d7785f; }
 
-.period-calendar-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 14px; padding: 11px 13px; border: 1px solid #e7ece9; border-radius: 10px; background: #fafbf8; color: #53645d; font-size: 0.74rem; }
+.period-calendar-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 9px 18px; padding: 12px 13px; border: 1px solid #e7ece9; border-radius: 10px; background: #fafbf8; color: #53645d; font-size: 0.74rem; }
 .period-calendar-legend > span { display: inline-flex; align-items: center; gap: 5px; }
-.legend-swatch { width: 12px; height: 12px; border: 2px solid #16734c; border-radius: 4px; background: #e4f1e9; }
+.period-calendar-legend .period-legend-entry { display: grid; grid-template-columns: 14px auto; align-items: center; column-gap: 7px; row-gap: 1px; }
+.period-legend-entry .legend-swatch { grid-row: span 2; }
+.period-legend-entry strong { color: #31483e; font-size: 0.73rem; }
+.period-legend-entry small { color: #718078; font-size: 0.68rem; }
+.legend-swatch { width: 13px; height: 13px; border: 2px solid; border-radius: 4px; }
+.legend-period-1 { border-color: #176b48; background: #e4f1e9; }
+.legend-period-2 { border-color: #a96608; background: #fff0d5; }
+.legend-period-custom { border-color: #697586; background: #e9edf1; }
+.period-marker-guide { color: #53645d; }
 .period-weekend-note { color: #78867f; }
 .period-existing, .period-range-builder, .period-quick-actions { min-width: 0; padding: 14px; border: 1px solid #e2e9e5; border-radius: 14px; background: #fff; }
 .period-existing-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
 .period-existing-heading h4, .period-range-builder h4, .period-quick-actions h4 { color: #183d33; font-size: 0.98rem; letter-spacing: -0.02em; }
 .period-existing-heading > span { display: grid; min-width: 25px; height: 25px; place-items: center; border-radius: 50%; background: #edf4ef; color: #285245; font-size: 0.72rem; font-weight: 800; }
 .period-range-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.period-range-item { --range-color: var(--period-green); display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: start; gap: 9px; padding: 9px; border: 1px solid #e8ede9; border-left: 4px solid var(--range-color); border-radius: 9px; background: #fdfefb; }
+.period-range-item { --range-color: var(--period-green); display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 9px; padding: 9px; border: 1px solid #e8ede9; border-left: 4px solid var(--range-color); border-radius: 9px; background: #fdfefb; }
 .range-green { --range-color: var(--period-green); }
 .range-gold { --range-color: var(--period-gold); }
 .range-red { --range-color: var(--period-red); }
@@ -1677,8 +1685,11 @@ input:focus-visible {
 .range-teal { --range-color: var(--period-teal); }
 .range-slate { --range-color: var(--period-slate); }
 .range-conflict { border-color: #e6b6ae; border-left-color: #b83226; background: #fff8f6; }
-.period-range-code { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 8px; background: #edf4ef; color: var(--range-color); font-size: 0.68rem; font-weight: 850; }
-.period-range-details { display: grid; min-width: 0; gap: 3px; color: #596960; font-size: 0.77rem; overflow-wrap: anywhere; }
+.period-range-details { display: grid; min-width: 0; gap: 4px; color: #596960; font-size: 0.77rem; overflow-wrap: anywhere; }
+.period-range-category { width: fit-content; max-width: 100%; padding: 3px 7px; border-radius: 999px; font-size: 0.67rem; font-weight: 800; line-height: 1.2; }
+.category-period-1 { background: #e4f1e9; color: #17633f; }
+.category-period-2 { background: #fff0d5; color: #895309; }
+.category-custom { background: #e9edf1; color: #4c5b6d; }
 .period-range-details strong { color: #243d33; font-size: 0.82rem; }
 .period-range-endpoints { display: grid; gap: 2px; font-variant-numeric: tabular-nums; }
 .period-range-endpoints b { color: #334f43; }

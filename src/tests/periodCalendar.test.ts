@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  classifyPayPeriod,
   getCalendarMonth,
   getHalfMonthRange,
   getPeriodRangeIssues
@@ -16,6 +17,32 @@ const period = (startDate: string, endDate: string, id = 'existing'): PayPeriod 
 });
 
 describe('payroll period calendar helpers', () => {
+  it('classifies only exact first and second quincenas from civil-date boundaries', () => {
+    expect(classifyPayPeriod(period('2024-02-01', '2024-02-15'))).toEqual({
+      kind: 'period-1', label: 'Período 1', color: 'green'
+    });
+    expect(classifyPayPeriod(period('2024-02-16', '2024-02-29'))).toEqual({
+      kind: 'period-2', label: 'Período 2', color: 'gold'
+    });
+    expect(classifyPayPeriod(period('2023-02-16', '2023-02-28'))).toEqual({
+      kind: 'period-2', label: 'Período 2', color: 'gold'
+    });
+  });
+
+  it('keeps cross-month, non-quincena, and invalid ranges in the neutral custom category', () => {
+    for (const range of [
+      period('2024-01-29', '2024-02-03'),
+      period('2024-02-02', '2024-02-15'),
+      period('2024-02-16', '2024-02-28'),
+      period('2024-02-30', '2024-03-02'),
+      period('2024-03-02', '2024-03-01')
+    ]) {
+      expect(classifyPayPeriod(range)).toEqual({
+        kind: 'custom', label: 'Rango personalizado', color: 'slate'
+      });
+    }
+  });
+
   it('builds complete Monday-to-Sunday rows, including visible dates from adjacent months', () => {
     const calendar = getCalendarMonth('2026-11');
 

@@ -16,6 +16,12 @@ export interface CalendarMonth {
 
 export type HalfMonth = '1' | '2';
 
+export type PayPeriodClassification = {
+  kind: 'period-1' | 'period-2' | 'custom';
+  label: 'Período 1' | 'Período 2' | 'Rango personalizado';
+  color: 'green' | 'gold' | 'slate';
+};
+
 const parseMonth = (month: string): { year: number; monthNumber: number } | null => {
   const match = /^(\d{4})-(\d{2})$/.exec(month);
   if (!match) return null;
@@ -28,6 +34,34 @@ const parseMonth = (month: string): { year: number; monthNumber: number } | null
 const daysInMonth = (year: number, month: number): number => {
   const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
   return [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+};
+
+const CUSTOM_PERIOD: PayPeriodClassification = {
+  kind: 'custom',
+  label: 'Rango personalizado',
+  color: 'slate'
+};
+
+/** Classify only exact calendar quincenas; every other range stays neutral. */
+export const classifyPayPeriod = (
+  period: Pick<PayPeriod, 'startDate' | 'endDate'>
+): PayPeriodClassification => {
+  if (!isCivilDate(period.startDate) || !isCivilDate(period.endDate) || period.startDate > period.endDate) {
+    return CUSTOM_PERIOD;
+  }
+
+  const [startYear, startMonth, startDay] = period.startDate.split('-').map(Number);
+  const [endYear, endMonth, endDay] = period.endDate.split('-').map(Number);
+  if (startYear !== endYear || startMonth !== endMonth) return CUSTOM_PERIOD;
+
+  if (startDay === 1 && endDay === 15) {
+    return { kind: 'period-1', label: 'Período 1', color: 'green' };
+  }
+  if (startDay === 16 && endDay === daysInMonth(startYear, startMonth)) {
+    return { kind: 'period-2', label: 'Período 2', color: 'gold' };
+  }
+
+  return CUSTOM_PERIOD;
 };
 
 const localDateForCivilDate = (value: string): Date => {
