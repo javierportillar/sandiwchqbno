@@ -11,8 +11,6 @@ export interface WeeklyLoadAssignment {
   replaces?: Shift;
 }
 
-export type WeeklyLoadMode = 'fill-unassigned' | 'replace-scheduled';
-
 export type WeeklyLoadSkipReason =
   | 'existing-assignment'
   | 'pending-branch'
@@ -30,12 +28,19 @@ export interface WeeklyLoadSkip {
   reason: WeeklyLoadSkipReason;
 }
 
+const PROTECTED_SKIP_REASONS: ReadonlySet<WeeklyLoadSkipReason> = new Set([
+  'day-off-preserved', 'review', 'duplicate', 'period-mismatch', 'period-overlap', 'pending-branch'
+]);
+
+export function isProtectedWeeklyLoadSkip(skip: WeeklyLoadSkip): boolean {
+  return PROTECTED_SKIP_REASONS.has(skip.reason);
+}
+
 export interface WeeklyLoadPlan {
   employeeId: string;
   weekStartDate: string;
   kind: ScheduledShiftKind;
   branchId: string;
-  mode: WeeklyLoadMode;
   assignments: WeeklyLoadAssignment[];
   skipped: WeeklyLoadSkip[];
 }
@@ -45,10 +50,9 @@ export function buildWeeklyLoadPlan(input: {
   branches: readonly Branch[];
   kind: ScheduledShiftKind;
   branchId: string;
-  mode?: WeeklyLoadMode;
   pendingBranches?: Readonly<Record<string, string>>;
 }): WeeklyLoadPlan {
-  const { schedule, branches, kind, branchId, mode = 'fill-unassigned', pendingBranches = {} } = input;
+  const { schedule, branches, kind, branchId, pendingBranches = {} } = input;
   const employee: Employee = schedule.employee;
   const branch = branches.find((candidate) => candidate.id === branchId);
   const assignments: WeeklyLoadAssignment[] = [];
@@ -82,7 +86,7 @@ export function buildWeeklyLoadPlan(input: {
       pushSkip('day-off-preserved');
       continue;
     }
-    const replacement = mode === 'replace-scheduled' && day.state === 'scheduled' &&
+    const replacement = day.state === 'scheduled' &&
       day.shiftIds.length === 1 && day.shift?.id === day.shiftIds[0]
       ? day.shift
       : undefined;
@@ -123,7 +127,6 @@ export function buildWeeklyLoadPlan(input: {
     weekStartDate: schedule.week.startDate,
     kind,
     branchId,
-    mode,
     assignments,
     skipped
   };

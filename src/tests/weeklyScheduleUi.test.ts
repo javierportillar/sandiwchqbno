@@ -69,7 +69,7 @@ describe('week-first schedule interface', () => {
     await mount();
     openWeekSchedule();
 
-    expect(screen.getByText('2026-01-12 — 2026-01-18')).toBeTruthy();
+    expect(within(screen.getByRole('navigation', { name: 'Navegación de semanas' })).getByText('2026-01-12 — 2026-01-18')).toBeTruthy();
     const card = screen.getByRole('heading', { name: 'Test Employee' }).closest('.employee-week-card') as HTMLElement;
     expect(within(card).getByText('8 h 00 min')).toBeTruthy();
     expect(within(card).getByText('Horas asignadas')).toBeTruthy();
@@ -159,25 +159,27 @@ describe('week-first schedule interface', () => {
     expect(screen.queryByRole('button', { name: 'Asignar turno a Test Employee, 2026-01-15' })).toBeNull();
   });
 
-  it('reviews a weekly load before applying it, preserves existing work and days off, and resolves crossed pay periods', async () => {
+  it('previews safe dates, protects explicit days off and review shifts, and resolves crossed pay periods', async () => {
     const dayOff = makeShift('protected-day-off', '2026-01-13', firstHalf.id, {
       restDay: true, startTime: undefined, endTime: undefined
     });
     const existing = makeShift('protected-shift', '2026-01-14', firstHalf.id, {
-      startTime: '10:00', endTime: '14:00'
+      startTime: '10:00', endTime: '14:00', breakMinutes: 15
     });
     const store = setup([dayOff, existing], [firstHalf, secondHalf], [{ ...employee, habitualShiftKind: 'normal' }]);
     await mount();
     openWeekSchedule();
 
     expect((screen.getByLabelText('Tipo de turno') as HTMLSelectElement).value).toBe('normal');
-    fireEvent.click(screen.getByRole('button', { name: 'Revisar carga semanal' }));
-    expect(screen.getByText('Se asignarán 5 día(s); se omitirán 2.')).toBeTruthy();
+    expect(screen.queryByRole('radio')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Previsualizar carga semanal' }));
+    expect(screen.getByText('Se reemplazarán 0 turno(s) y se crearán 5 nuevo(s). 2 fecha(s) protegida(s); 2 omitida(s) en total.')).toBeTruthy();
+    expect(screen.getByText(/Semana 2026-01-12 — 2026-01-18 · Test Employee · destino: Unicentro/)).toBeTruthy();
     expect(screen.queryByText(/No hay período de pago/)).toBeNull();
     expect(store.data.get('qbano-shifts')).toContain('protected-day-off');
     expect(JSON.parse(store.data.get('qbano-shifts')!)).toHaveLength(2);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar y aplicar 5 turno(s)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar 5 cambio(s)' }));
     await waitFor(() => expect(JSON.parse(store.data.get('qbano-shifts')!).length).toBe(7));
     const records = JSON.parse(store.data.get('qbano-shifts')!) as Shift[];
     expect(records.find((shift) => shift.id === dayOff.id)).toEqual(dayOff);
@@ -194,7 +196,7 @@ describe('week-first schedule interface', () => {
     expect(await screen.findByText(/Carga aplicada a Test Employee/)).toBeTruthy();
   });
 
-  it('requires explicit replace mode and confirms before replacing scheduled days', async () => {
+  it('previews the selected destination and replaces a scheduled shift with one apply action', async () => {
     const dayOff = makeShift('protected-free-day', '2026-01-13', firstHalf.id, {
       restDay: true, startTime: undefined, endTime: undefined
     });
@@ -205,15 +207,14 @@ describe('week-first schedule interface', () => {
     await mount();
     openWeekSchedule();
 
-    fireEvent.click(screen.getByRole('radio', { name: /Reemplazar turnos existentes/ }));
     fireEvent.change(screen.getByLabelText('Sede de destino para turnos nuevos y reemplazados'), {
       target: { value: 'branch-avenida' }
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Revisar carga semanal' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Previsualizar carga semanal' }));
 
-    expect(screen.getByText('Se reemplazarán 1 turno(s) y se asignarán 5 día(s) vacío(s); se omitirán 1.')).toBeTruthy();
+    expect(screen.getByText('Se reemplazarán 1 turno(s) y se crearán 5 nuevo(s). 1 fecha(s) protegida(s); 1 omitida(s) en total.')).toBeTruthy();
     expect(screen.getAllByText('10:00–14:00').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Después')).toHaveLength(6);
+    expect(screen.getAllByText('Reemplazo').length).toBe(1);
     const replacedPreviewRow = Array.from(document.querySelectorAll<HTMLElement>('.weekly-load-change'))
       .find((row) => row.textContent?.includes('10:00–14:00'));
     expect(replacedPreviewRow?.textContent).toContain('Sede: Unicentro');
@@ -221,7 +222,7 @@ describe('week-first schedule interface', () => {
     expect(store.data.get('qbano-shifts')).toContain('replace-this-shift');
     expect(JSON.parse(store.data.get('qbano-shifts')!)).toHaveLength(2);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar reemplazo de 1 turno(s) y asignar 5' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar 6 cambio(s)' }));
     await waitFor(() => expect(JSON.parse(store.data.get('qbano-shifts')!).length).toBe(7));
 
     const records = JSON.parse(store.data.get('qbano-shifts')!) as Shift[];
@@ -234,6 +235,46 @@ describe('week-first schedule interface', () => {
       templateId: 'avenida-sala-normal', overrideBranchId: 'branch-avenida'
     });
     expect(await screen.findByText(/1 turno\(s\) reemplazado\(s\)/)).toBeTruthy();
+  });
+
+  it('shows weekly employee, hour, branch, and weekday metrics and refreshes with the selected week', async () => {
+    const inactiveEmployee: Employee = { ...seededEmployees[1], id: 'inactive-week-employee', fullName: 'Inactive Employee', active: false };
+    const unassignedEmployee: Employee = { ...seededEmployees[2], id: 'unassigned-week-employee', fullName: 'Unassigned Employee', active: true };
+    const shifts: Shift[] = [
+      makeShift('unicentro-monday', '2026-01-12', firstHalf.id, { startTime: '09:00', endTime: '12:00' }),
+      makeShift('avenida-tuesday', '2026-01-13', firstHalf.id, {
+        startTime: '14:00', endTime: '16:00', overrideBranchId: 'branch-avenida', breakMinutes: 30
+      }),
+      {
+        id: 'unico-tuesday', employeeId: inactiveEmployee.id, payPeriodId: firstHalf.id,
+        date: '2026-01-13', startTime: '14:00', endTime: '17:00', breakMinutes: 0
+      }
+    ];
+    setup(shifts, [firstHalf, secondHalf], [employee, inactiveEmployee, unassignedEmployee]);
+    await mount();
+    openWeekSchedule();
+
+    const summary = screen.getByRole('region', { name: 'Resumen de la semana' });
+    expect(within(summary).getByText('2026-01-12 — 2026-01-18')).toBeTruthy();
+    expect(within(summary).getByText('8 h 00 min')).toBeTruthy();
+    expect(within(summary).getByText('Empleados con turnos')).toBeTruthy();
+    expect(within(summary).getByText('Activos sin asignación')).toBeTruthy();
+    expect(within(summary).getByRole('img', { name: 'Columnas apiladas con horas programadas por día y sede' })).toBeTruthy();
+    expect(within(summary).getByRole('img', { name: 'Barras horizontales con las horas semanales programadas por sede' })).toBeTruthy();
+    expect(summary.querySelector('.weekly-summary-chart-scroll')).toBeTruthy();
+    expect(summary.querySelector('.weekly-summary-table-scroll')).toBeTruthy();
+
+    const branchTable = within(summary).getByRole('table', { name: 'Horas, empleados y proporción semanal por sede' });
+    expect(within(branchTable).getByRole('row', { name: /Unicentro 3 h 00 min 1 38%/ })).toBeTruthy();
+    expect(within(branchTable).getByRole('row', { name: /Único 3 h 00 min 1 38%/ })).toBeTruthy();
+    expect(within(branchTable).getByRole('row', { name: /Avenida 2 h 00 min 1 25%/ })).toBeTruthy();
+
+    const dailyTable = within(summary).getByRole('table', { name: 'Horas programadas por día y sede' });
+    expect(within(dailyTable).getByRole('row', { name: /mar · 2026-01-13 0 h 00 min 3 h 00 min 2 h 00 min 5 h 00 min/ })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Semana siguiente a 2026-01-12' }));
+    expect(within(summary).getByText('2026-01-19 — 2026-01-25')).toBeTruthy();
+    expect(summary.querySelectorAll('.weekly-summary-kpi')[2].querySelector('strong')?.textContent).toBe('0 h 00 min');
   });
 
   it('persists an employee habitual shift and exposes it as a suggestion rather than assigning it', async () => {

@@ -38,7 +38,7 @@ describe('weekly bulk load planning', () => {
     });
   });
 
-  it('preserves existing work and an explicit day off', () => {
+  it('automatically replaces a valid shift, creates empty-day shifts, and preserves an explicit day off', () => {
     const existing: Shift[] = [
       { id: 'work', employeeId: employee.id, payPeriodId: firstPeriod.id, date: '2026-01-14', startTime: '10:00', endTime: '14:00', breakMinutes: 0 },
       { id: 'free', employeeId: employee.id, payPeriodId: firstPeriod.id, date: '2026-01-13', restDay: true, breakMinutes: 0 }
@@ -50,9 +50,12 @@ describe('weekly bulk load planning', () => {
       branchId: employee.branchId
     });
 
-    expect(plan.assignments).toHaveLength(5);
-    expect(plan.assignments.some((item) => item.date === '2026-01-13' || item.date === '2026-01-14')).toBe(false);
-    expect(plan.skipped.filter((item) => item.reason === 'existing-assignment')).toHaveLength(1);
+    expect(plan.assignments).toHaveLength(6);
+    expect(plan.assignments.filter((item) => item.replaces)).toHaveLength(1);
+    expect(plan.assignments.find((item) => item.date === '2026-01-14')).toMatchObject({
+      replaces: existing.find((shift) => shift.id === 'work')
+    });
+    expect(plan.assignments.some((item) => item.date === '2026-01-13')).toBe(false);
     expect(plan.skipped).toContainEqual({ date: '2026-01-13', reason: 'day-off-preserved' });
   });
 
@@ -69,8 +72,7 @@ describe('weekly bulk load planning', () => {
       schedule: makeSchedule([firstPeriod, secondPeriod], [existing, dayOff]),
       branches: seededBranches,
       kind: 'normal',
-      branchId: employee.branchId,
-      mode: 'replace-scheduled'
+      branchId: employee.branchId
     });
 
     expect(plan.assignments).toHaveLength(6);
@@ -92,22 +94,19 @@ describe('weekly bulk load planning', () => {
       schedule: makeSchedule([firstPeriod, secondPeriod], [existing]),
       branches: seededBranches,
       kind: 'partido',
-      branchId: employee.branchId,
-      mode: 'replace-scheduled'
+      branchId: employee.branchId
     });
     const unchanged = buildWeeklyLoadPlan({
       schedule: makeSchedule([firstPeriod, secondPeriod], [existing]),
       branches: seededBranches,
       kind: 'partido',
-      branchId: employee.branchId,
-      mode: 'replace-scheduled'
+      branchId: employee.branchId
     });
     const changed = buildWeeklyLoadPlan({
       schedule: makeSchedule([firstPeriod, secondPeriod], [{ ...existing, startTime: '11:00' }]),
       branches: seededBranches,
       kind: 'partido',
-      branchId: employee.branchId,
-      mode: 'replace-scheduled'
+      branchId: employee.branchId
     });
 
     expect(weeklyLoadPlansMatch(reviewed, unchanged)).toBe(true);
@@ -119,11 +118,11 @@ describe('weekly bulk load planning', () => {
       { ...firstPeriod, endDate: '2026-01-14' },
       { ...secondPeriod, startDate: '2026-01-17' }
     ];
-    const gapPlan = buildWeeklyLoadPlan({ schedule: makeSchedule(gapPeriods), branches: seededBranches, kind: 'normal', branchId: employee.branchId, mode: 'replace-scheduled' });
+    const gapPlan = buildWeeklyLoadPlan({ schedule: makeSchedule(gapPeriods), branches: seededBranches, kind: 'normal', branchId: employee.branchId });
     expect(gapPlan.skipped.filter((item) => item.reason === 'period-missing').map((item) => item.date)).toEqual(['2026-01-15', '2026-01-16']);
 
     const overlap = { ...secondPeriod, id: 'overlap', startDate: '2026-01-15', endDate: '2026-01-17' };
-    const overlapPlan = buildWeeklyLoadPlan({ schedule: makeSchedule([firstPeriod, secondPeriod, overlap]), branches: seededBranches, kind: 'normal', branchId: employee.branchId, mode: 'replace-scheduled' });
+    const overlapPlan = buildWeeklyLoadPlan({ schedule: makeSchedule([firstPeriod, secondPeriod, overlap]), branches: seededBranches, kind: 'normal', branchId: employee.branchId });
     expect(overlapPlan.skipped.filter((item) => item.reason === 'period-overlap').map((item) => item.date)).toEqual(['2026-01-15', '2026-01-16', '2026-01-17']);
   });
 
@@ -139,7 +138,6 @@ describe('weekly bulk load planning', () => {
       branches: noSundayBranch,
       kind: 'normal',
       branchId: employee.branchId,
-      mode: 'replace-scheduled',
       pendingBranches: { [pendingKey]: 'branch-avenida' }
     });
 
@@ -169,8 +167,7 @@ describe('weekly bulk load planning', () => {
       schedule: makeSchedule([firstPeriod, secondPeriod], [mismatch, duplicateA, duplicateB]),
       branches: seededBranches,
       kind: 'normal',
-      branchId: employee.branchId,
-      mode: 'replace-scheduled'
+      branchId: employee.branchId
     });
     expect(guardedPlan.skipped).toContainEqual({ date: '2026-01-15', reason: 'period-mismatch' });
     expect(guardedPlan.skipped).toContainEqual({ date: '2026-01-17', reason: 'duplicate' });
@@ -184,8 +181,7 @@ describe('weekly bulk load planning', () => {
       schedule: makeSchedule([firstPeriod, secondPeriod], [reviewShift]),
       branches: seededBranches,
       kind: 'normal',
-      branchId: employee.branchId,
-      mode: 'replace-scheduled'
+      branchId: employee.branchId
     });
     expect(reviewPlan.skipped).toContainEqual({ date: '2026-01-12', reason: 'review' });
     expect(reviewPlan.assignments.some((item) => item.date === '2026-01-12')).toBe(false);

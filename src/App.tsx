@@ -28,6 +28,7 @@ import type { RestoreJournalRead, RestoreResult } from './lib/localBackup';
 import { ShiftEditor } from './components/ShiftEditor';
 import { WeekNavigator } from './components/WeekNavigator';
 import { WeekSchedule } from './components/WeekSchedule';
+import { WeeklyScheduleSummary } from './components/WeeklyScheduleSummary';
 import { PeriodCalendar } from './components/PeriodCalendar';
 import type { EmployeeWeekActions } from './components/EmployeeWeekCard';
 import { duplicateShiftGroups, endsBeyondPeriodEnd, isEmptyShift, needsShiftReview, normalTemplateForEmployee, templateFields } from './lib/shiftSafety';
@@ -48,7 +49,7 @@ import {
   isCivilDate
 } from './lib/scheduleWeek';
 import type { EmployeeWeekDay } from './lib/scheduleWeek';
-import { buildWeeklyLoadPlan, weeklyLoadPlansMatch, type WeeklyLoadPlan } from './lib/weeklyBulkLoad';
+import { buildWeeklyLoadPlan, isProtectedWeeklyLoadSkip, weeklyLoadPlansMatch, type WeeklyLoadPlan } from './lib/weeklyBulkLoad';
 import { getCurrentCalendarMonth } from './lib/periodCalendar';
 
 const TABS: Array<{ id: AppTab; label: string }> = [
@@ -821,7 +822,6 @@ function AppContent({ initial, persist, backupCallbacks }: {
       branches,
       kind: reviewedPlan.kind,
       branchId: reviewedPlan.branchId,
-      mode: reviewedPlan.mode,
       pendingBranches
     });
     if (!weeklyLoadPlansMatch(reviewedPlan, plan)) {
@@ -843,12 +843,11 @@ function AppContent({ initial, persist, backupCallbacks }: {
       }
     }
     const omitted = plan.skipped.length + (plan.assignments.length - applied);
+    const protectedCount = plan.skipped.filter(isProtectedWeeklyLoadSkip).length;
     setScheduleNotice(
       applied > 0
-        ? plan.mode === 'replace-scheduled'
-          ? `Carga aplicada a ${employee.fullName}: ${replaced} turno(s) reemplazado(s) y ${added} nuevo(s) para la semana ${plan.weekStartDate}. Se omitieron ${omitted} día(s); los días libres explícitos se conservaron.`
-          : `Carga aplicada a ${employee.fullName}: ${applied} turno(s) asignado(s) para la semana ${plan.weekStartDate}. Se omitieron ${omitted} día(s); los turnos existentes y los días libres explícitos se conservaron.`
-        : `No se aplicaron turnos a ${employee.fullName}: no hay días seguros disponibles para la semana ${plan.weekStartDate}.`
+        ? `Carga aplicada a ${employee.fullName} para la semana ${plan.weekStartDate}: ${replaced} turno(s) reemplazado(s) y ${added} nuevo(s). Se omitieron ${omitted} fecha(s), incluidas ${protectedCount} protegida(s); los días libres y las fechas con revisión/conflicto se conservaron.`
+        : `No se aplicaron turnos a ${employee.fullName}: no hay fechas seguras disponibles para la semana ${plan.weekStartDate}. Se conservaron ${protectedCount} fecha(s) protegida(s) y se omitieron ${omitted} en total.`
     );
   };
 
@@ -1667,6 +1666,16 @@ function AppContent({ initial, persist, backupCallbacks }: {
             </div>
           )}
         </section>
+      )}
+
+      {activeTab === 'horarios' && (
+        <WeeklyScheduleSummary
+          employees={employees}
+          schedules={allEmployeeWeekSchedules}
+          branches={branches}
+          shifts={shifts}
+          week={selectedWeek}
+        />
       )}
 
       {activeTab === 'calculo' && (
