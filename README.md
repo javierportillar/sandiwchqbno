@@ -131,8 +131,8 @@ La presentación de nómina citada arriba no está incluida en los archivos vers
 | Recargo Nocturno | `RN` | `RN` | 0,35 | Concepto que el prototipo asigna después del corte nocturno configurado. |
 | Hora Extra Diurna | `HED` | `HED` | 0,25 | Concepto que el prototipo asigna a horas extra antes del corte configurado. |
 | Hora Extra Nocturna | `HEN` | `HEN` | 0,75 | Concepto que el prototipo asigna a horas extra después del corte configurado. |
-| Dominical Diurno | `DOM08` | `DOM_DIURNO` | 0,80 | El clasificador actual usa el bucket `DOM08` para segmentos dominicales diurnos. |
-| Dominical Nocturno | `DOM18` | `DOM_NOCT` | 1,80 | `DOM18` está disponible como campo de resultado, pero el clasificador actual envía los segmentos dominicales nocturnos a `RN_DOM` o `HEN_DOM`. |
+| Dominical/festivo diurno | `DOM08` | `DOM_DIURNO` | 0,80 legado | El clasificador usa el bucket `DOM08` para segmentos diurnos de domingo o festivo. El número en el ID del bucket no determina la tarifa vigente por fecha. |
+| Dominical/festivo nocturno | `DOM18` | `DOM_NOCT` | 1,80 legado | `DOM18` está disponible como campo de resultado, pero el clasificador envía los segmentos nocturnos a `RN_DOM` o `HEN_DOM`. |
 | Recargo Nocturno Dominical | `RN_DOM` | `RN_DOM` | 1,15 | Factor configurado por el prototipo; aplicación pendiente de validar. |
 | Hora Extra Diurna Dominical | `HED_DOM` | `HED_DOM` | 2,05 | Factor configurado por el prototipo; aplicación pendiente de validar. |
 | Hora Extra Nocturna Dominical | `HEN_DOM` | `HEN_DOM` | 2,55 | Factor configurado por el prototipo; aplicación pendiente de validar. |
@@ -140,6 +140,12 @@ La presentación de nómina citada arriba no está incluida en los archivos vers
 > **Nota sobre diferencias documentadas históricamente.** Notas antiguas del proyecto comparaban `HED = 0,25` con un total de `1,25` atribuido a la presentación ausente. Esa atribución no puede verificarse. El código actual configura `HED` en `0,25` y deja en cero el importe monetario `ORD`; no se puede inferir de esas notas si otro proceso incorpora el valor base. El responsable de nómina debe revisar la fórmula completa antes de cualquier pago.
 
 > **Configuración actual del prototipo: 7h/día.** `defaultSettings.dailyOrdinaryHours = 7`. El motor usa este valor para clasificar el tiempo y generar los resultados que siguen. Es una constante de configuración, no una jornada legal o empresarial aprobada; validar antes de usar importes.
+
+### 4.1.1 · Calendario y referencias legales por fecha
+
+El calendario reconoce domingos y festivos nacionales colombianos fijos, trasladados al lunes según la [Ley 51 de 1983](https://www.funcionpublica.gov.co/eva/gestornormativo/norma.php?i=4954) y relativos a Pascua. Las horas de un festivo se clasifican en los mismos buckets especiales que las horas de domingo. El detalle de cálculo y el resumen semanal muestran el porcentaje legal de referencia según la fecha trabajada: 80% desde el 1 de julio de 2025, 90% desde el 1 de julio de 2026 y 100% desde el 1 de julio de 2027, según el [artículo 14 de la Ley 2466 de 2025](https://www.funcionpublica.gov.co/eva/gestornormativo/norma.php?i=260676).
+
+**Límite importante:** la tasa por fecha se conserva y se muestra como referencia, pero los subtotales monetarios aún usan los multiplicadores configurados en el prototipo (`DOM_DIURNO`, `RN_DOM`, etc.). Estos importes no aplican automáticamente el porcentaje estatutario variable y no son una liquidación legal. El usuario puede programar los siete días y la app no descuenta pausas. Se muestran avisos no bloqueantes para trabajo los siete días o superar el tope ordinario semanal de referencia vigente en la fecha de cierre de la semana: 48 h antes del 15-07-2023, 47 h desde esa fecha, 46 h desde el 15-07-2024, 44 h desde el 15-07-2025 y 42 h desde el 15-07-2026, según la transición de la [Ley 2101 de 2021](https://www.funcionpublica.gov.co/eva/gestornormativo/norma.php?i=166506). La regla general también contempla un día de descanso obligatorio y límites de horas extra; estos avisos no bloquean ni determinan por sí mismos el tratamiento de nómina. Validar excepciones, acuerdos y liquidación con el responsable de nómina.
 
 ### 4.2 · Turnos plantilla por sede
 
@@ -237,7 +243,7 @@ const result = calculateWeeklyScheduledMinutes({
 
 **Horarios** abre una semana explícita de siete días civiles, con navegación anterior/siguiente y un rango exacto. La semana inicial busca datos existentes antes de usar una semana vacía. Para cada fecha se exige exactamente un período de pago; las fechas sin período o con períodos superpuestos quedan visibles pero no asignables. Los cambios guardan el `payPeriodId` resuelto para esa fecha, incluso al cruzar del 15 al 16.
 
-Cada empleado muestra **Horas asignadas**, estados de cobertura y avisos de revisión. “Sin asignar” permanece incompleto; “Día libre” solo aparece tras una acción explícita y se guarda como `restDay: true`, sin horas ni descuento. En la vista semanal, las pausas no se descuentan de las horas programadas. La edición personalizada conserva los tramos y propiedades legacy; turnos ambiguos, duplicados, desfasados de período o que cruzan el cierre no se adivinan ni se sobrescriben sin revisión.
+Cada empleado muestra **Horas asignadas**, estados de cobertura y avisos de revisión. “Sin asignar” permanece incompleto; “Día libre” solo aparece tras una acción explícita y se guarda como `restDay: true`, sin horas ni descuento. Las horas programadas y de nómina no descuentan `breakMinutes`; los descansos entre tramos solo quedan fuera porque no pertenecen a ningún intervalo trabajado. El resumen de Horarios avisa, sin bloquear la agenda, si hay turnos en los siete días o se superan 42 horas brutas. La edición personalizada conserva tramos y propiedades legacy; turnos ambiguos, duplicados, desfasados de período o que cruzan el cierre no se adivinan ni se sobrescriben sin revisión.
 
 La vista **Quincena y pincel** conserva la grilla, los filtros por sede, el colapso por sede, la asignación por pincel y la sesión de deshacer. La grilla quincenal se refluye en tarjetas de fecha a cualquier ancho, sin exigir desplazamiento horizontal. Ambas vistas son locales y persisten en `localStorage`; no agregan autenticación, base de datos ni cambios a nómina.
 

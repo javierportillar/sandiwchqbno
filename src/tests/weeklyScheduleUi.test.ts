@@ -277,6 +277,28 @@ describe('week-first schedule interface', () => {
     expect(summary.querySelectorAll('.weekly-summary-kpi')[2].querySelector('strong')?.textContent).toBe('0 h 00 min');
   });
 
+  it('shows non-blocking seven-day and 42-hour warnings plus the holiday rate for the selected week', async () => {
+    const novemberPeriod = {
+      id: 'november-period', companyId: employee.companyId,
+      startDate: '2026-11-01', endDate: '2026-11-15', label: 'November'
+    };
+    const dates = [
+      '2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06', '2026-11-07', '2026-11-08'
+    ];
+    setup(dates.map((date, index) => makeShift(`seven-day-${index}`, date, novemberPeriod.id, {
+      startTime: '10:00', endTime: '17:00', breakMinutes: 0
+    })), [novemberPeriod]);
+    await mount();
+    openWeekSchedule();
+
+    const summary = screen.getByRole('region', { name: 'Resumen de la semana' });
+    const legalNotice = within(summary).getByRole('heading', { name: 'Alertas y referencias legales' }).parentElement as HTMLElement;
+    expect(within(legalNotice).getByText(/tiene horas asignadas los 7 días de la semana/)).toBeTruthy();
+    expect(within(legalNotice).getByText(/49 h brutas programadas, por encima de 42 h/)).toBeTruthy();
+    expect(within(legalNotice).getByText(/2026-11-02 — Festivo: Día de Todos los Santos · recargo legal de referencia 90%/)).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Test Employee' })).toBeTruthy();
+  });
+
   it('persists an employee habitual shift and exposes it as a suggestion rather than assigning it', async () => {
     const store = setup([], [firstHalf, secondHalf], [employee]);
     await mount();

@@ -48,6 +48,39 @@ function enterTimes(start: string, end: string) {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('safe schedule editing', () => {
+  it('shows overtime reference dates from overnight work segments, including holiday and rate boundaries', async () => {
+    const broadPeriod = { ...period, startDate: '2025-01-01', endDate: '2026-12-31', label: '2025–2026' };
+    const overnightShifts: Shift[] = [
+      {
+        id: 'saturday-sunday', employeeId: employee.id, payPeriodId: broadPeriod.id, date: '2026-11-07',
+        startTime: '22:00', endTime: '02:00', breakMinutes: 0
+      },
+      {
+        id: 'weekday-holiday', employeeId: employee.id, payPeriodId: broadPeriod.id, date: '2026-04-30',
+        startTime: '22:00', endTime: '02:00', breakMinutes: 0
+      },
+      {
+        id: 'rate-boundary-holiday', employeeId: employee.id, payPeriodId: broadPeriod.id, date: '2025-06-30',
+        startTime: '22:00', endTime: '02:00', breakMinutes: 0
+      }
+    ];
+    setup(overnightShifts, employee, broadPeriod, [broadPeriod]);
+    await mount();
+    fireEvent.click(screen.getByRole('button', { name: 'Cálculo' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Calcular' }));
+
+    const rowFor = (startDate: string) => screen.getByText(startDate).closest('tr') as HTMLElement;
+    expect(within(rowFor('2026-11-07')).getByText(
+      '2026-11-08 — Domingo · recargo legal de referencia 90%'
+    )).toBeTruthy();
+    expect(within(rowFor('2026-04-30')).getByText(
+      '2026-05-01 — Festivo: Día del Trabajo · recargo legal de referencia 80%'
+    )).toBeTruthy();
+    expect(within(rowFor('2025-06-30')).getByText(
+      '2025-06-30 — Festivo: San Pedro y San Pablo, Sagrado Corazón de Jesús · recargo legal de referencia 75%'
+    )).toBeTruthy();
+  });
+
   it('keeps the concept-hours preview available for an integrity-valid period', async () => {
     const valid = { ...legacy, id: 'valid-shift', templateId: undefined, breakMinutes: 0 };
     setup([valid]);

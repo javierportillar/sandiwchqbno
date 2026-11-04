@@ -28,7 +28,7 @@ const calculate = (period: PayPeriod, periods: PayPeriod[], shifts: Shift[]) => 
 
 describe('payroll period integrity', () => {
   it('keeps calculations valid for matching shifts and adjacent periods', () => {
-    const assigned = shift(selectedPeriod.id, selectedPeriod.startDate);
+    const assigned = shift(selectedPeriod.id, '2026-01-02'); // Jan 1 is now classified as a Colombian public holiday.
     const shiftSnapshot = structuredClone(assigned);
     expect(validatePayPeriodRange(otherPeriod, [selectedPeriod])).toEqual([]);
     expect(validatePayrollPeriodIntegrity(selectedPeriod, [selectedPeriod, otherPeriod], [assigned])).toEqual([]);

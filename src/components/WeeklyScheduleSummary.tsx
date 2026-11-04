@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
 import type { Branch, Employee, Shift } from '../types/payroll';
 import type { EmployeeWeekSchedule, ScheduleWeek } from '../lib/scheduleWeek';
-import { addDaysToDate } from '../lib/scheduleWeek';
+import { addDaysToDate, getScheduleWeekDates } from '../lib/scheduleWeek';
 import { buildWeeklyScheduleSummary } from '../lib/weeklyScheduleSummary';
+import { getColombianWorkdayRateLabel } from '../lib/colombianCalendar';
+import { buildWeeklyPayrollWarnings } from '../lib/weeklyPayrollWarnings';
 
 function formatMinutes(minutes: number): string {
   return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')} min`;
@@ -41,6 +43,10 @@ export function WeeklyScheduleSummary({
     employees, schedules, branches, shifts, week
   ]);
   const weekEndDate = addDaysToDate(week.endDateExclusive, -1);
+  const payrollWarnings = useMemo(() => buildWeeklyPayrollWarnings(schedules), [schedules]);
+  const specialDates = useMemo(() => getScheduleWeekDates(week)
+    .map((date) => ({ date, label: getColombianWorkdayRateLabel(date) }))
+    .filter((entry): entry is { date: string; label: string } => entry.label !== null), [week]);
   const maxDayMinutes = Math.max(1, ...summary.days.map((day) => day.scheduledMinutes));
   const maxBranchMinutes = Math.max(1, summary.unattributedMinutes, ...summary.branches.map((branch) => branch.scheduledMinutes));
   const hasUnattributedMinutes = summary.unattributedMinutes > 0;
@@ -55,6 +61,29 @@ export function WeeklyScheduleSummary({
         </div>
         <p className="weekly-summary-hours-note">Horas brutas programadas: no descuentan pausas ni representan horas pagadas.</p>
       </header>
+
+      <aside className="weekly-summary-legal-notice" aria-labelledby="weekly-legal-notice-title">
+        <h3 id="weekly-legal-notice-title">Alertas y referencias legales</h3>
+        <p>El sistema permite programar los siete días y no descuenta pausas. Estas alertas son informativas: no bloquean la agenda ni certifican cumplimiento legal. La jornada ordinaria máxima general es de 42 h semanales desde el 15 de julio de 2026, con un día de descanso obligatorio.</p>
+        {payrollWarnings.length > 0 && (
+          <ul>
+            {payrollWarnings.map((warning) => warning.code === 'seven-consecutive-calendar-days' ? (
+              <li key={`${warning.employeeId}-${warning.code}`}>
+                <strong>{warning.employeeName}:</strong> tiene horas asignadas los 7 días de la semana. Se conserva la programación solicitada; revisá el régimen laboral aplicable.
+              </li>
+            ) : (
+              <li key={`${warning.employeeId}-${warning.code}`}>
+                <strong>{warning.employeeName}:</strong> {formatCompactHours(Math.round(warning.scheduledHours * 60))} brutas programadas, por encima de {warning.weeklyLimitHours} h semanales de referencia vigente al cierre de la semana. Revisá la distribución y las horas extra; el prototipo no liquida esta diferencia automáticamente.
+              </li>
+            ))}
+          </ul>
+        )}
+        {specialDates.length > 0 && (
+          <p className="weekly-summary-special-dates">
+            Dominicales/festivos y recargo legal de referencia por fecha: {specialDates.map(({ date, label }) => `${date} — ${label}`).join('; ')}.
+          </p>
+        )}
+      </aside>
 
       <div className="weekly-summary-kpis" aria-label="Indicadores de la semana">
         <article className="weekly-summary-kpi">

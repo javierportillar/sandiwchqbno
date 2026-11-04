@@ -925,6 +925,38 @@ small.muted {
   font-size: 0.74rem;
 }
 
+.weekly-summary-legal-notice {
+  padding: 13px 15px;
+  border: 1px solid #e9c97c;
+  border-left: 4px solid #c17a12;
+  border-radius: 10px;
+  background: #fffaf0;
+  color: #59451f;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.weekly-summary-legal-notice h3 {
+  margin: 0 0 5px;
+  color: #493918;
+  font-size: 0.94rem;
+}
+
+.weekly-summary-legal-notice p { margin: 0; }
+.weekly-summary-legal-notice ul { display: grid; gap: 4px; margin: 8px 0; padding-left: 19px; }
+.weekly-summary-special-dates { margin-top: 7px !important; }
+
+.payroll-legal-rate-note {
+  margin: 0;
+  padding: 11px 13px;
+  border: 1px solid #d7e1ed;
+  border-radius: 9px;
+  background: #f6f9fc;
+  color: #52647e;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 .weekly-summary-kpis {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));

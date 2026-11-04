@@ -50,7 +50,7 @@ describe('motor de cálculo de nómina', () => {
       id: 's3',
       employeeId: 'emp-1',
       payPeriodId: 'period-1',
-      date: '2026-01-01',
+      date: '2026-01-02',
       startTime: '08:00',
       endTime: '20:00',
       breakMinutes: 0
@@ -75,7 +75,7 @@ describe('motor de cálculo de nómina', () => {
       id: 's-midnight-budget',
       employeeId: 'emp-1',
       payPeriodId: 'period-1',
-      date: '2026-01-01',
+      date: '2026-01-02',
       startTime: '08:00',
       endTime: '02:00',
       breakMinutes: 0
@@ -86,14 +86,14 @@ describe('motor de cálculo de nómina', () => {
       defaultSettings
     );
 
-    // 01/01: 7 ORD + 4 HED + 5 HEN; 01/02: 2 RN ordinarias.
+    // 02/01: 7 ORD + 4 HED + 5 HEN; 03/01: 2 RN ordinarias.
     expect(totals.ORD).toBe(7);
     expect(totals.HED).toBe(4);
     expect(totals.HEN).toBe(5);
     expect(totals.RN).toBe(2);
   });
 
-  it('calcula el preview del turno sin depender de un resultado agregado previo', () => {
+  it('no descuenta breakMinutes al calcular horas programadas', () => {
     const shift: Shift = {
       id: 's-preview',
       employeeId: 'emp-1',
@@ -107,7 +107,7 @@ describe('motor de cálculo de nómina', () => {
     const totals = calculateShiftTotals(shift, defaultSettings);
 
     expect(totals.ORD).toBe(7);
-    expect(totals.HED).toBe(1);
+    expect(totals.HED).toBe(2);
     expect(totals.RN).toBe(0);
   });
 
@@ -161,7 +161,28 @@ describe('motor de cálculo de nómina', () => {
     expect(totals.DOM18).toBe(0);
   });
 
-  it('turno partido legacy sin secondStart/secondEnd usa heurístico', () => {
+  it('clasifica un festivo colombiano observado igual que el domingo', () => {
+    const shift: Shift = {
+      id: 's-colombian-holiday',
+      employeeId: 'emp-1',
+      payPeriodId: 'period-1',
+      date: '2026-11-02', // Día de Todos los Santos observado; el 1 de noviembre cae domingo.
+      startTime: '11:00',
+      endTime: '21:00',
+      breakMinutes: 0
+    };
+
+    expect(calculateShiftTotals(shift, defaultSettings)).toMatchObject({
+      ORD: 0,
+      HED: 0,
+      HEN: 0,
+      DOM08: 7,
+      HED_DOM: 1,
+      HEN_DOM: 2
+    });
+  });
+
+  it('no infiere una pausa ni reduce el intervalo legacy si faltan los tramos explícitos', () => {
     const shift: Shift = {
       id: 's11',
       employeeId: 'emp-1',
@@ -178,10 +199,9 @@ describe('motor de cálculo de nómina', () => {
       defaultSettings
     );
 
-    expect(totals.ORD).toBe(4);
-    expect(totals.RN).toBe(3);
-    expect(totals.HED).toBe(0);
-    expect(totals.HEN).toBe(0);
+    expect(totals.ORD).toBe(7);
+    expect(totals.HED).toBe(1);
+    expect(totals.HEN).toBe(3);
   });
 
   it('aggregateDailyAndPeriod acumula por empleado', () => {

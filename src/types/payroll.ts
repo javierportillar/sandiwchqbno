@@ -88,6 +88,7 @@ export interface ComputedDayBreakdown {
   rnDomHours: number;
   hedDomHours: number;
   henDomHours: number;
+  workdayRateReference: string | null;
   rawSegmentsJSON: string;
 }
 

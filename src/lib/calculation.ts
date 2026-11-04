@@ -9,12 +9,14 @@ import {
   Shift
 } from '../types/payroll';
 import { PeriodIntegrityError, validatePayrollPeriodIntegrity } from './periodIntegrity';
+import { getColombianWorkdayInfo, getColombianWorkdayRateReferenceSummary } from './colombianCalendar';
 
 interface WorkSegment {
   date: string;
-  isSunday: boolean;
+  isRestDay: boolean;
   isNight: boolean;
   minutes: number;
+  restDayPremiumPercent: number | null;
 }
 
 interface ClassifiedSegment extends WorkSegment {
@@ -70,11 +72,6 @@ const addDays = (dateISO: string, amount: number): string => {
   return formatDateFromUTC(date);
 };
 
-const isSundayDate = (dateISO: string): boolean => {
-  const date = new Date(`${dateISO}T12:00:00Z`);
-  return date.getUTCDay() === 0;
-};
-
 const isNightMinute = (
   minuteOfDay: number,
   nocturnalStart: number,
@@ -86,35 +83,6 @@ const isNightMinute = (
   return minuteOfDay >= nocturnalStart || minuteOfDay < nocturnalEnd;
 };
 
-const applyBreakMinutes = (
-  segments: WorkSegment[],
-  breakMinutes: number
-): WorkSegment[] => {
-  const remaining = segments.map((seg) => ({ ...seg }));
-  let pending = Math.max(0, breakMinutes);
-
-  const consume = (matcher: (s: WorkSegment) => boolean) => {
-    for (const segment of remaining) {
-      if (!matcher(segment) || pending <= 0 || segment.minutes <= 0) {
-        continue;
-      }
-      const used = Math.min(segment.minutes, pending);
-      segment.minutes -= used;
-      pending -= used;
-      if (pending <= 0) {
-        break;
-      }
-    }
-  };
-
-  // Simplificación MVP solicitada: descontar primero diurno ordinario.
-  consume((s) => !s.isSunday && !s.isNight);
-  consume((s) => !s.isNight);
-  consume(() => true);
-
-  return remaining.filter((s) => s.minutes > 0);
-};
-
 const splitShiftRangeIntoSegments = (
   startAbs: number,
   endAbs: number,
@@ -124,19 +92,24 @@ const splitShiftRangeIntoSegments = (
   const nocturnalStart = timeToMinutes(settings.nocturnalStart);
   const nocturnalEnd = timeToMinutes(settings.nocturnalEnd);
   const segments: WorkSegment[] = [];
+  const workdayInfoByDate = new Map<string, ReturnType<typeof getColombianWorkdayInfo>>();
   let current: WorkSegment | null = null;
 
   for (let absMinute = startAbs; absMinute < endAbs; absMinute += 1) {
     const dayOffset = Math.floor(absMinute / 1440);
     const minuteOfDay = ((absMinute % 1440) + 1440) % 1440;
     const localDate = addDays(shiftDate, dayOffset);
-    const isSunday = isSundayDate(localDate);
+    let workdayInfo = workdayInfoByDate.get(localDate);
+    if (!workdayInfo) {
+      workdayInfo = getColombianWorkdayInfo(localDate);
+      workdayInfoByDate.set(localDate, workdayInfo);
+    }
     const isNight = isNightMinute(minuteOfDay, nocturnalStart, nocturnalEnd);
 
     if (
       current &&
       current.date === localDate &&
-      current.isSunday === isSunday &&
+      current.isRestDay === workdayInfo.isSpecialDay &&
       current.isNight === isNight
     ) {
       current.minutes += 1;
@@ -146,9 +119,10 @@ const splitShiftRangeIntoSegments = (
       }
       current = {
         date: localDate,
-        isSunday,
+        isRestDay: workdayInfo.isSpecialDay,
         isNight,
-        minutes: 1
+        minutes: 1,
+        restDayPremiumPercent: workdayInfo.premiumPercent
       };
     }
   }
@@ -191,31 +165,15 @@ export const splitShiftIntoSegments = (
     end += 1440;
   }
 
-  const totalMinutes = end - start;
-
-  // Fallback legacy para partido sin secondStart/secondEnd (heuristico)
-  if (shift.templateId === TEMPLATE_PARTIDO && shift.breakMinutes > 0) {
-    const workMinutes = totalMinutes - shift.breakMinutes;
-    if (workMinutes <= 0) return [];
-    const halfWork = Math.floor(workMinutes / 2);
-    const internalFirstEnd = start + halfWork;
-    const secondStartAbs = internalFirstEnd + shift.breakMinutes;
-
-    const firstSegments = splitShiftRangeIntoSegments(start, internalFirstEnd, shift.date, settings);
-    const secondSegments = splitShiftRangeIntoSegments(secondStartAbs, end, shift.date, settings);
-
-    return [...firstSegments, ...secondSegments];
-  }
-
-  const segments = splitShiftRangeIntoSegments(start, end, shift.date, settings);
-  return applyBreakMinutes(segments, shift.breakMinutes);
+  // Legacy breakMinutes is metadata only: scheduled intervals are never reduced by break time.
+  return splitShiftRangeIntoSegments(start, end, shift.date, settings);
 };
 
 export const classifySegments = (segments: WorkSegment[]): ClassifiedSegment[] => {
-  // Dominical nocturno → RN_DOM (recargo nocturno 35% + dominical 80% = 1.15).
-  // DOM18 queda como columna de referencia para cálculo alternativo (factor 1.8 total).
+  // Sunday and Colombian public-holiday work share the prototype's special-day buckets.
+  // The effective statutory premium is retained per segment; legacy money multipliers stay provisional.
   return segments.map((segment) => {
-    const ordinaryBucket: keyof HourTotals = segment.isSunday
+    const ordinaryBucket: keyof HourTotals = segment.isRestDay
       ? segment.isNight
         ? 'RN_DOM'
         : 'DOM08'
@@ -223,7 +181,7 @@ export const classifySegments = (segments: WorkSegment[]): ClassifiedSegment[] =
         ? 'RN'
         : 'ORD';
 
-    const extraBucket: keyof HourTotals = segment.isSunday
+    const extraBucket: keyof HourTotals = segment.isRestDay
       ? segment.isNight
         ? 'HEN_DOM'
         : 'HED_DOM'
@@ -290,6 +248,7 @@ const toComputedDayBreakdown = (
     rnDomHours: totals.RN_DOM,
     hedDomHours: totals.HED_DOM,
     henDomHours: totals.HEN_DOM,
+    workdayRateReference: getColombianWorkdayRateReferenceSummary(segments),
     rawSegmentsJSON: JSON.stringify(segments)
   };
 };

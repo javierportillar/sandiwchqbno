@@ -77,8 +77,8 @@ const LABEL_BY_KEY: Record<keyof HourTotals, string> = {
   RN: 'RN',
   HED: 'HED',
   HEN: 'HEN',
-  DOM08: 'DOMIN 0,8',
-  DOM18: 'DOMIN 1,8',
+  DOM08: 'DOMIN. DIURNO',
+  DOM18: 'DOMIN. NOCTURNO',
   RN_DOM: 'RN DOMIN',
   HED_DOM: 'HED DOMIN',
   HEN_DOM: 'HEN DOMIN'
@@ -998,8 +998,8 @@ function AppContent({ initial, persist, backupCallbacks }: {
       ['RN', totals.RN],
       ['HED', totals.HED],
       ['HEN', totals.HEN],
-      ['DOM 0,8', totals.DOM08],
-      ['DOM 1,8', totals.DOM18],
+      ['DOMIN. DIURNO', totals.DOM08],
+      ['DOMIN. NOCTURNO', totals.DOM18],
       ['RN DOM', totals.RN_DOM],
       ['HED DOM', totals.HED_DOM],
       ['HEN DOM', totals.HEN_DOM]
@@ -1681,6 +1681,7 @@ function AppContent({ initial, persist, backupCallbacks }: {
       {activeTab === 'calculo' && (
         <section className="panel grid">
           <h2>4. Cálculo</h2>
+          <p className="payroll-legal-rate-note">La tarifa legal de referencia se muestra por fecha en el detalle. Los importes todavía usan los multiplicadores configurados del prototipo; no aplican automáticamente la tasa legal variable y no constituyen una liquidación validada.</p>
           <div className="calculation-scope-grid">
             <section className="calculation-scope-card" aria-labelledby="calculation-period-title">
               <p className="scope-eyebrow">Cálculo de nómina</p>
@@ -1798,14 +1799,15 @@ function AppContent({ initial, persist, backupCallbacks }: {
                     <tr>
                       <th>Empleado</th>
                       <th>Fecha</th>
+                      <th>Día especial / recargo legal de referencia</th>
                       <th>Sede</th>
                       <th>Turno</th>
                       <th>ORD</th>
                       <th>RN</th>
                       <th>HED</th>
                       <th>HEN</th>
-                      <th>DOMIN 0,8</th>
-                      <th>DOMIN 1,8</th>
+                      <th>DOMIN. DIURNO</th>
+                      <th>DOMIN. NOCTURNO</th>
                       <th>RN DOMIN</th>
                       <th>HED DOMIN</th>
                       <th>HEN DOMIN</th>
@@ -1816,6 +1818,7 @@ function AppContent({ initial, persist, backupCallbacks }: {
                       <tr key={buildShiftKey(item.employeeId, item.shift.payPeriodId, item.date)}>
                         <td>{item.employeeName}</td>
                         <td>{item.date}</td>
+                        <td>{item.breakdown.workdayRateReference ?? '—'}</td>
                         <td>{branchesMap.get(item.shift.overrideBranchId ?? employees.find((employee) => employee.id === item.employeeId)?.branchId ?? '')?.name ?? '—'}</td>
                         <td>{formatShiftRange(item.shift)}</td>
                         <td>{fixed2(item.breakdown.ordHours)}</td>

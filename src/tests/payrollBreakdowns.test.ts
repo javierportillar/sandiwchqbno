@@ -292,4 +292,41 @@ describe('desgloses de nómina de las plantillas del README 4.2', () => {
       });
     }
   );
+
+  it('reclasifica el festivo del 2 de noviembre en la semana de Cecilia sin alterar las 71 horas', () => {
+    const schedule = [
+      ['2026-11-02', '11:00', '21:00'],
+      ['2026-11-03', '11:00', '21:00'],
+      ['2026-11-04', '11:00', '21:00'],
+      ['2026-11-05', '11:00', '21:00'],
+      ['2026-11-06', '11:00', '21:30'],
+      ['2026-11-07', '11:00', '21:30'],
+      ['2026-11-08', '11:00', '21:00']
+    ] as const;
+    const totals = schedule.reduce((sum, [date, startTime, endTime], index) => {
+      const shift: Shift = {
+        id: `cecilia-${index}`,
+        employeeId: 'cecilia',
+        payPeriodId: 'november-period',
+        date,
+        startTime,
+        endTime,
+        breakMinutes: 0
+      };
+      const day = calculateShiftTotals(shift, defaultSettings);
+      for (const key of Object.keys(sum) as Array<keyof HourTotals>) sum[key] += day[key];
+      return sum;
+    }, { ...ZERO_TOTALS });
+
+    expect(totals).toEqual({
+      ...ZERO_TOTALS,
+      ORD: 35,
+      HED: 5,
+      HEN: 11,
+      DOM08: 14,
+      HED_DOM: 2,
+      HEN_DOM: 4
+    });
+    expect(Object.values(totals).reduce((hours, value) => hours + value, 0)).toBe(71);
+  });
 });
