@@ -2989,11 +2989,158 @@ input:focus-visible {
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
 }
 
-/* Mobile Responsiveness */
+/* Mobile Daily Breakdown Cards */
+.mobile-breakdowns-list {
+  display: grid;
+  gap: 10px;
+}
+
+.mobile-day-breakdown-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.breakdown-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.breakdown-date-block {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.breakdown-date-block strong {
+  font-size: 0.95rem;
+  color: #0f172a;
+}
+
+.breakdown-sede-badge {
+  background: #e2e8f0;
+  color: #334155;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.breakdown-total-badge {
+  background: #dcfce7;
+  color: #166534;
+  font-weight: 800;
+  font-size: 0.88rem;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+
+.breakdown-schedule-text {
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.breakdown-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.mini-chip {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 6px;
+}
+
+.mini-chip.ord {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.mini-chip.rn {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.mini-chip.hed,
+.mini-chip.hen {
+  background: #f3e8ff;
+  color: #6b21a8;
+}
+
+.mini-chip.dom,
+.mini-chip.rn-dom,
+.mini-chip.hed-dom,
+.mini-chip.hen-dom {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+/* Visibility utilities across viewport sizes */
+.show-on-mobile {
+  display: none !important;
+}
+
+/* Mobile Responsiveness Rules (< 640px) */
 @media (max-width: 640px) {
+  .show-on-mobile {
+    display: grid !important;
+  }
+
+  .hide-on-mobile {
+    display: none !important;
+  }
+
+  /* Prevent auto-zooming on iPhone/iOS Safari */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* Mobile App Shell & Panels */
+  .app-shell {
+    padding: 10px 8px;
+    gap: 10px;
+  }
+
+  .panel {
+    padding: 14px 12px;
+    border-radius: 14px;
+  }
+
+  /* Touch Targets for Ergonomics */
+  button,
+  .btn-block,
+  .primary,
+  .subtle,
+  .danger {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .chip {
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* Header Layout on Mobile */
   .admin-header-row {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .admin-app-title {
+    font-size: 1.25rem;
   }
 
   .btn-portal-switch {
@@ -3001,31 +3148,111 @@ input:focus-visible {
     justify-content: center;
   }
 
+  /* Smooth Swipeable Nav Tabs for Admin */
+  .nav {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 6px;
+    padding-bottom: 4px;
+  }
+
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav button {
+    white-space: nowrap;
+    flex-shrink: 0;
+    padding: 8px 14px;
+    font-size: 0.85rem;
+  }
+
+  /* Employee Portal Top Header */
   .employee-top-header {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+
+  .header-left {
+    justify-content: space-between;
+  }
+
+  .header-center {
+    width: 100%;
+  }
+
+  .employee-user-badge {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .header-right {
     width: 100%;
-    justify-content: flex-end;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
   }
 
-  .hide-on-mobile {
-    display: none;
+  .btn-admin-switch,
+  .btn-logout {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* 2x2 Grid for Employee Tabs on Mobile */
+  .employee-nav-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
   }
 
   .employee-nav-tabs .employee-tab-btn {
-    min-width: 45%;
-    font-size: 0.8rem;
-    padding: 8px 10px;
+    min-width: 0;
+    width: 100%;
+    font-size: 0.82rem;
+    padding: 10px 6px;
+    flex-direction: column;
+    gap: 4px;
+    text-align: center;
   }
 
+  /* Hero & KPI Typography */
   .time-range {
     font-size: 1.15rem;
   }
 
   .kpi-main-value {
     font-size: 1.4rem;
+  }
+
+  /* Week Navigator Controls */
+  .nav-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .week-range-label {
+    grid-column: span 2;
+    order: -1;
+    justify-content: center;
+    font-size: 0.92rem;
+  }
+
+  .nav-controls button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Table horizontal scroll support with touch momentum */
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 10px;
   }
 }

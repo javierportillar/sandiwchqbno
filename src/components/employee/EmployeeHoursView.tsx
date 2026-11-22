@@ -172,10 +172,10 @@ export const EmployeeHoursView: React.FC<EmployeeHoursViewProps> = ({
             </div>
           </div>
 
-          {/* Daily Breakdown Table (Hours only) */}
+          {/* Daily Breakdown Table (Hours only - Desktop & Tablet) */}
           <div className="panel grid">
             <h3>Detalle Día a Día de la Quincena</h3>
-            <div className="table-wrap">
+            <div className="table-wrap hide-on-mobile">
               <table>
                 <thead>
                   <tr>
@@ -242,6 +242,80 @@ export const EmployeeHoursView: React.FC<EmployeeHoursViewProps> = ({
                   )}
                 </tbody>
               </table>
+            </div>
+
+            {/* Daily Breakdown Cards (Mobile-optimized) */}
+            <div className="mobile-breakdowns-list show-on-mobile">
+              {dayBreakdowns.length > 0 ? (
+                dayBreakdowns.map(({ date, shift, breakdown }) => {
+                  const shiftBranch =
+                    branches.find((b) => b.id === (shift.overrideBranchId || employee.branchId)) ||
+                    habitualBranch;
+
+                  const dayTotal =
+                    breakdown.ordHours +
+                    breakdown.rnHours +
+                    breakdown.hedHours +
+                    breakdown.henHours +
+                    breakdown.dom08Hours +
+                    breakdown.rnDomHours +
+                    breakdown.hedDomHours +
+                    breakdown.henDomHours;
+
+                  return (
+                    <div key={shift.id} className="mobile-day-breakdown-card">
+                      <div className="breakdown-card-top">
+                        <div className="breakdown-date-block">
+                          <strong>{date}</strong>
+                          <span className="breakdown-sede-badge">{shiftBranch?.name ?? 'Sede'}</span>
+                        </div>
+                        <span className="breakdown-total-badge">{dayTotal.toFixed(1)} h</span>
+                      </div>
+
+                      <div className="breakdown-schedule-text">
+                        {shift.restDay
+                          ? 'Día de descanso'
+                          : `${shift.startTime ?? '-'} a ${shift.endTime ?? '-'}${
+                              shift.secondStart ? ` · ${shift.secondStart} a ${shift.secondEnd}` : ''
+                            }`}
+                      </div>
+
+                      {!shift.restDay && (
+                        <div className="breakdown-chips-row">
+                          {breakdown.ordHours > 0 && (
+                            <span className="mini-chip ord">ORD: {breakdown.ordHours.toFixed(1)}h</span>
+                          )}
+                          {breakdown.rnHours > 0 && (
+                            <span className="mini-chip rn">RN: {breakdown.rnHours.toFixed(1)}h</span>
+                          )}
+                          {breakdown.hedHours > 0 && (
+                            <span className="mini-chip hed">HED: {breakdown.hedHours.toFixed(1)}h</span>
+                          )}
+                          {breakdown.henHours > 0 && (
+                            <span className="mini-chip hen">HEN: {breakdown.henHours.toFixed(1)}h</span>
+                          )}
+                          {breakdown.dom08Hours > 0 && (
+                            <span className="mini-chip dom">DOM: {breakdown.dom08Hours.toFixed(1)}h</span>
+                          )}
+                          {breakdown.rnDomHours > 0 && (
+                            <span className="mini-chip rn-dom">RN DOM: {breakdown.rnDomHours.toFixed(1)}h</span>
+                          )}
+                          {breakdown.hedDomHours > 0 && (
+                            <span className="mini-chip hed-dom">HED DOM: {breakdown.hedDomHours.toFixed(1)}h</span>
+                          )}
+                          {breakdown.henDomHours > 0 && (
+                            <span className="mini-chip hen-dom">HEN DOM: {breakdown.henDomHours.toFixed(1)}h</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="muted" style={{ textAlign: 'center', padding: '16px' }}>
+                  No hay turnos registrados para esta quincena.
+                </div>
+              )}
             </div>
           </div>
         </>
