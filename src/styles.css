@@ -3106,12 +3106,16 @@ input:focus-visible {
   /* Mobile App Shell & Panels */
   .app-shell {
     padding: 10px 8px;
-    gap: 10px;
+    gap: 12px;
+    max-width: 100vw;
+    overflow-x: hidden;
   }
 
   .panel {
     padding: 14px 12px;
-    border-radius: 14px;
+    border-radius: 16px;
+    border: 1px solid #e8edf5;
+    box-shadow: 0 4px 18px -2px rgba(15, 23, 42, 0.05);
   }
 
   /* Touch Targets for Ergonomics */
@@ -3124,12 +3128,14 @@ input:focus-visible {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    border-radius: 12px;
   }
 
   .chip {
-    min-height: 36px;
+    min-height: 38px;
     display: inline-flex;
     align-items: center;
+    border-radius: 999px;
   }
 
   /* Header Layout on Mobile */
@@ -3141,11 +3147,14 @@ input:focus-visible {
 
   .admin-app-title {
     font-size: 1.25rem;
+    line-height: 1.25;
   }
 
   .btn-portal-switch {
     width: 100%;
     justify-content: center;
+    border-radius: 999px;
+    min-height: 44px;
   }
 
   /* Smooth Swipeable Nav Tabs for Admin */
@@ -3166,16 +3175,19 @@ input:focus-visible {
   .nav button {
     white-space: nowrap;
     flex-shrink: 0;
-    padding: 8px 14px;
+    padding: 8px 16px;
     font-size: 0.85rem;
+    border-radius: 999px;
   }
 
-  /* Employee Portal Top Header */
+  /* Employee Portal Top Header (App-bar style) */
   .employee-top-header {
     flex-direction: column;
     align-items: stretch;
     gap: 10px;
-    padding: 12px 14px;
+    padding: 14px 14px;
+    border-radius: 16px;
+    border: 1px solid #eaedf3;
   }
 
   .header-left {
@@ -3189,6 +3201,8 @@ input:focus-visible {
   .employee-user-badge {
     width: 100%;
     justify-content: flex-start;
+    padding: 8px 12px;
+    border-radius: 12px;
   }
 
   .header-right {
@@ -3202,32 +3216,76 @@ input:focus-visible {
   .btn-logout {
     width: 100%;
     justify-content: center;
+    min-height: 42px;
   }
 
-  /* 2x2 Grid for Employee Tabs on Mobile */
+  /* App-like Floating Bottom Dock Navigation (Rappi / Uber style) */
+  .employee-portal-shell {
+    padding-bottom: 84px;
+  }
+
   .employee-nav-tabs {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid #e2e8f0;
+    box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.08);
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 6px;
+    grid-template-columns: repeat(4, 1fr);
+    padding: 6px 4px calc(env(safe-area-inset-bottom, 0px) + 6px);
+    border-radius: 0;
+    margin: 0;
+    gap: 4px;
   }
 
   .employee-nav-tabs .employee-tab-btn {
     min-width: 0;
     width: 100%;
-    font-size: 0.82rem;
-    padding: 10px 6px;
+    padding: 6px 2px;
+    display: flex;
     flex-direction: column;
-    gap: 4px;
-    text-align: center;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    border-radius: 10px;
+    background: transparent;
+    border: none;
+    color: #64748b;
+    box-shadow: none;
   }
 
-  /* Hero & KPI Typography */
+  .employee-nav-tabs .employee-tab-btn.active {
+    color: #d97706;
+    background: #fef3c7;
+    font-weight: 700;
+  }
+
+  /* Hero & KPI Typography (App Card Style) */
+  .employee-hero-card {
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .hero-time-display {
+    padding: 14px 16px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
   .time-range {
-    font-size: 1.15rem;
+    font-size: 1.25rem;
+    word-break: break-word;
   }
 
   .kpi-main-value {
-    font-size: 1.4rem;
+    font-size: 1.45rem;
   }
 
   /* Week Navigator Controls */
@@ -3242,6 +3300,7 @@ input:focus-visible {
     order: -1;
     justify-content: center;
     font-size: 0.92rem;
+    text-align: center;
   }
 
   .nav-controls button {
@@ -3249,10 +3308,59 @@ input:focus-visible {
     justify-content: center;
   }
 
+  /* Day Card in Mobile Week Schedule */
+  .employee-day-card {
+    padding: 14px;
+    border-radius: 14px;
+  }
+
   /* Table horizontal scroll support with touch momentum */
   .table-wrap {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    border-radius: 10px;
+    border-radius: 12px;
+  }
+}
+
+/* Tablet Optimizations (iPad, Galaxy Tab: 641px - 1024px) */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .app-shell {
+    max-width: 95%;
+    padding: 18px;
+    gap: 16px;
+  }
+
+  .panel {
+    padding: 18px;
+    border-radius: 18px;
+    border: 1px solid #e8edf5;
+  }
+
+  .grid-2,
+  .employee-kpi-grid,
+  .hours-grid-cards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+
+  .employee-days-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+
+  .employee-hero-card {
+    padding: 22px;
+    border-radius: 20px;
+  }
+
+  .employee-nav-tabs .employee-tab-btn {
+    padding: 10px 12px;
+    font-size: 0.85rem;
+  }
+
+  button,
+  .primary,
+  .subtle {
+    min-height: 42px;
   }
 }
