@@ -2059,3 +2059,973 @@ input:focus-visible {
   .period-existing, .period-range-builder, .period-quick-actions { padding: 12px; }
   .period-builder-actions { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ==========================================================================
+   SUITE DEL EMPLEADO & MODERN UI/UX ENHANCEMENTS
+   ========================================================================== */
+
+/* Brand & Header */
+.brand-logo-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff8eb;
+  border: 1px solid #fde0b2;
+  padding: 4px 12px;
+  border-radius: 999px;
+  width: fit-content;
+}
+
+.brand-name {
+  font-weight: 800;
+  color: #92400e;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+}
+
+.portal-badge {
+  background: #ede9fe;
+  color: #5b21b6;
+  border: 1px solid #ddd6fe;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.admin-header-panel {
+  display: grid;
+  gap: 16px;
+  background: linear-gradient(135deg, #ffffff 0%, #f9fbfe 100%);
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 4px 20px -2px rgba(20, 33, 61, 0.06);
+}
+
+.admin-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.admin-app-title {
+  font-size: 1.5rem;
+  color: #0f172a;
+  margin-top: 4px;
+}
+
+.btn-portal-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  font-size: 0.92rem;
+  border-radius: 999px;
+  box-shadow: 0 3px 12px rgba(245, 158, 11, 0.25);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.btn-portal-switch:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 16px rgba(245, 158, 11, 0.35);
+}
+
+/* Login Card & Container */
+.login-container {
+  min-height: 80vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 460px;
+  display: grid;
+  gap: 20px;
+  padding: 32px 24px;
+  border-radius: 20px;
+  background: #ffffff;
+  border: 1px solid #dce5f2;
+  box-shadow: 0 12px 40px -10px rgba(20, 33, 61, 0.12);
+}
+
+.login-header {
+  text-align: center;
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+}
+
+.login-brand-icon {
+  width: 56px;
+  height: 56px;
+  background: #fef3c7;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.login-mode-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  background: #f1f5f9;
+  padding: 4px;
+  border-radius: 12px;
+}
+
+.login-mode-tabs .tab-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.login-mode-tabs .tab-btn.active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.login-form {
+  display: grid;
+  gap: 16px;
+}
+
+.login-form input {
+  font-size: 1rem;
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+}
+
+.login-form input:focus {
+  outline: none;
+  border-color: #fca311;
+  box-shadow: 0 0 0 3px rgba(252, 163, 17, 0.2);
+}
+
+.label-text {
+  font-weight: 600;
+  color: #334155;
+  font-size: 0.88rem;
+}
+
+.helper-text {
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.btn-block {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.login-error-alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+}
+
+.login-demo-section {
+  display: grid;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.demo-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #92400e;
+  letter-spacing: 0.04em;
+}
+
+.demo-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip-quick-access {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.chip-quick-access:hover {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  color: #92400e;
+}
+
+.badge-hint {
+  background: #e2e8f0;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  color: #475569;
+}
+
+.admin-chip {
+  background: #ede9fe;
+  border-color: #ddd6fe;
+  color: #5b21b6;
+  font-weight: 600;
+}
+
+.login-footer-actions {
+  text-align: center;
+}
+
+/* Employee Portal Shell */
+.employee-portal-shell {
+  display: grid;
+  gap: 16px;
+}
+
+.employee-top-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 20px;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(20, 33, 61, 0.05);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.header-center {
+  display: flex;
+  align-items: center;
+}
+
+.employee-user-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 6px 14px;
+  border-radius: 999px;
+}
+
+.user-avatar-circle {
+  width: 32px;
+  height: 32px;
+  background: #fef3c7;
+  color: #d97706;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.user-info {
+  display: grid;
+  line-height: 1.2;
+}
+
+.user-name {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: #0f172a;
+}
+
+.user-sub {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-admin-switch,
+.btn-logout {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  font-size: 0.85rem;
+  border-radius: 8px;
+}
+
+/* Employee Navigation Tabs */
+.employee-nav-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px;
+  background: #f1f5f9;
+  border-radius: 12px;
+}
+
+.employee-tab-btn {
+  flex: 1;
+  min-width: 140px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: #475569;
+  font-weight: 600;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.employee-tab-btn.active {
+  background: #ffffff;
+  color: #d97706;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+}
+
+/* Hero Today Card */
+.employee-hero-card {
+  display: grid;
+  gap: 16px;
+  background: linear-gradient(135deg, #ffffff 0%, #fffcf5 100%);
+  border: 1px solid #fed7aa;
+  border-radius: 18px;
+  padding: 24px;
+}
+
+.hero-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hero-greeting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.badge-today-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #fef3c7;
+  color: #92400e;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.badge-holiday {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #ecfdf5;
+  color: #065f46;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.hero-branch-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.hero-status-body {
+  display: grid;
+  gap: 12px;
+}
+
+.hero-kind-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.badge-rotation {
+  background: #ede9fe;
+  color: #5b21b6;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.badge-role {
+  background: #f1f5f9;
+  color: #334155;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.hero-time-display {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 20px;
+  background: #ffffff;
+  border: 1px solid #fed7aa;
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(217, 119, 6, 0.08);
+}
+
+.hero-time-display .time-icon {
+  color: #d97706;
+}
+
+.time-range {
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.time-subtitle {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.hero-rest-active {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+}
+
+.hero-next-shift-banner {
+  padding-top: 12px;
+  border-top: 1px solid #fed7aa;
+  font-size: 0.88rem;
+}
+
+.next-shift-info {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.next-branch-badge {
+  background: #e0f2fe;
+  color: #0369a1;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+/* Employee Week View & KPIs */
+.employee-week-container {
+  display: grid;
+  gap: 16px;
+}
+
+.employee-week-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.nav-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.week-range-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.05rem;
+  color: #1e293b;
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.current-week-reset {
+  text-align: center;
+}
+
+.employee-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.kpi-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+}
+
+.kpi-value {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.kpi-label {
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+/* 7-Day Responsive Grid */
+.employee-days-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.employee-day-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 14px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.employee-day-card.is-today {
+  border-color: #f59e0b;
+  background: #fffdfa;
+  box-shadow: 0 4px 18px rgba(245, 158, 11, 0.15);
+}
+
+.employee-day-card.is-rest {
+  background: #f8fafc;
+  opacity: 0.9;
+}
+
+.day-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.day-name-block {
+  display: grid;
+  line-height: 1.2;
+}
+
+.day-title {
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: #0f172a;
+}
+
+.day-date {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.day-badges {
+  display: flex;
+  gap: 4px;
+}
+
+.badge-today {
+  background: #f59e0b;
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.badge-domingo {
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.badge-festivo {
+  background: #ecfdf5;
+  color: #047857;
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.day-card-body {
+  display: grid;
+  gap: 8px;
+}
+
+.shift-info-box {
+  display: grid;
+  gap: 6px;
+}
+
+.shift-times-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.92rem;
+  color: #0f172a;
+}
+
+.shift-branch-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.tag-rotacion {
+  background: #ede9fe;
+  color: #5b21b6;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.shift-duration-tag {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #0891b2;
+  background: #e0f2fe;
+  padding: 3px 8px;
+  border-radius: 6px;
+  width: fit-content;
+}
+
+.rest-info-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  color: #64748b;
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+
+.unassigned-info-box {
+  padding: 12px 0;
+  font-size: 0.85rem;
+}
+
+/* Hours View & KPI banner */
+.employee-hours-container {
+  display: grid;
+  gap: 16px;
+}
+
+.hours-kpi-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 24px;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
+  border: 1px solid #bbf7d0;
+}
+
+.kpi-main {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.kpi-main-label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #166534;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.kpi-main-value {
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: #0f172a;
+}
+
+.kpi-sub-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.badge-kpi {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.badge-kpi.holiday {
+  background: #fef3c7;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+.hours-grid-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.hour-card {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+}
+
+.hour-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hour-type {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.hour-value {
+  font-size: 1.6rem;
+  font-weight: 850;
+  color: #0f172a;
+}
+
+/* Profile & Security */
+.employee-profile-container {
+  display: grid;
+  gap: 16px;
+}
+
+.profile-header-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.profile-avatar {
+  width: 54px;
+  height: 54px;
+  background: #fef3c7;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.profile-details-list {
+  display: grid;
+  gap: 14px;
+  padding-top: 6px;
+}
+
+.detail-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed #e2e8f0;
+}
+
+.detail-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #64748b;
+  font-size: 0.88rem;
+}
+
+.detail-value {
+  color: #0f172a;
+  font-size: 0.92rem;
+}
+
+.badge-active-status {
+  background: #dcfce7;
+  color: #15803d;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.pin-form-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.message-alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+}
+
+.message-alert.success {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+}
+
+.message-alert.error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+/* Modal Backdrop & Card */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 1000;
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 400px;
+  display: grid;
+  gap: 16px;
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 640px) {
+  .admin-header-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .btn-portal-switch {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .employee-top-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .header-right {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .hide-on-mobile {
+    display: none;
+  }
+
+  .employee-nav-tabs .employee-tab-btn {
+    min-width: 45%;
+    font-size: 0.8rem;
+    padding: 8px 10px;
+  }
+
+  .time-range {
+    font-size: 1.15rem;
+  }
+
+  .kpi-main-value {
+    font-size: 1.4rem;
+  }
+}

@@ -240,7 +240,8 @@ export const defaultSettings: PayrollSettings = {
     RN_DOM: 1.15,
     HED_DOM: 2.05,
     HEN_DOM: 2.55
-  }
+  },
+  adminPin: '1234'
 };
 
 export const seededEmployees: Employee[] = [
@@ -251,7 +252,8 @@ export const seededEmployees: Employee[] = [
     fullName: 'Laura Martínez',
     documentId: '10101010',
     baseMonthlySalary: 1650000,
-    active: true
+    active: true,
+    pin: '1010'
   },
   {
     id: 'emp-2',
@@ -260,7 +262,8 @@ export const seededEmployees: Employee[] = [
     fullName: 'Juan Camilo Rojas',
     documentId: '20202020',
     baseMonthlySalary: 1550000,
-    active: true
+    active: true,
+    pin: '2020'
   },
   {
     id: 'emp-3',
@@ -270,7 +273,8 @@ export const seededEmployees: Employee[] = [
     documentId: '30303030',
     baseMonthlySalary: 1700000,
     active: true,
-    role: 'sala'
+    role: 'sala',
+    pin: '3030'
   }
 ];
 

@@ -50,6 +50,7 @@ export interface Employee {
   active: boolean;
   role?: EmployeeRole;
   habitualShiftKind?: ScheduledShiftKind;
+  pin?: string;
 }
 
 export interface PayPeriod {
@@ -108,6 +109,7 @@ export interface PayrollSettings {
     HED_DOM: number;
     HEN_DOM: number;
   };
+  adminPin?: string;
 }
 
 export interface HourTotals {
@@ -152,3 +154,10 @@ export type AppTab =
   | 'horarios'
   | 'calculo'
   | 'configuracion';
+
+export type AppViewMode = 'admin' | 'employee' | 'login';
+
+export interface EmployeeAuthSession {
+  employeeId: string;
+  authenticatedAt: string;
+}

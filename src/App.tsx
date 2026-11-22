@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   AppTab,
+  AppViewMode,
   Branch,
   CalculationResult,
   Employee,
@@ -51,6 +52,14 @@ import {
 import type { EmployeeWeekDay } from './lib/scheduleWeek';
 import { buildWeeklyLoadPlan, isProtectedWeeklyLoadSkip, weeklyLoadPlansMatch, type WeeklyLoadPlan } from './lib/weeklyBulkLoad';
 import { getCurrentCalendarMonth } from './lib/periodCalendar';
+import { EmployeePortal } from './components/employee/EmployeePortal';
+import { EmployeeLogin } from './components/employee/EmployeeLogin';
+import {
+  getStoredEmployeeSession,
+  setStoredEmployeeSession,
+  verifyAdminPin
+} from './lib/employeeAuth';
+import { Building2, UserCheck } from 'lucide-react';
 
 const TABS: Array<{ id: AppTab; label: string }> = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -423,6 +432,15 @@ function AppContent({ initial, persist, backupCallbacks }: {
   };
 }) {
   const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
+  const [viewMode, setViewMode] = useState<AppViewMode>('admin');
+  const [currentEmployeeId, setCurrentEmployeeId] = useState<string | null>(() => {
+    const session = getStoredEmployeeSession();
+    return session?.employeeId ?? null;
+  });
+  const [adminPinModalOpen, setAdminPinModalOpen] = useState(false);
+  const [adminPinInput, setAdminPinInput] = useState('');
+  const [adminPinError, setAdminPinError] = useState<string | null>(null);
+
   const [branches] = useState(initial.branches);
   const [employees, setEmployees] = useState(initial.employees);
   const [periods, setPeriods] = useState(initial.periods);
@@ -443,7 +461,8 @@ function AppContent({ initial, persist, backupCallbacks }: {
     branchId: branches[0]?.id ?? '',
     baseMonthlySalary: 1600000,
     role: '' as string,
-    habitualShiftKind: '' as ScheduledShiftKind | ''
+    habitualShiftKind: '' as ScheduledShiftKind | '',
+    pin: ''
   });
 
   const [periodCreationError, setPeriodCreationError] = useState('');
@@ -798,20 +817,31 @@ function AppContent({ initial, persist, backupCallbacks }: {
     if (!newEmployee.fullName.trim()) {
       return;
     }
+    const cleanPin = newEmployee.pin?.trim();
+    const cleanDoc = newEmployee.documentId.trim();
+    const fallbackPin = cleanDoc.length >= 4 ? cleanDoc.slice(-4) : '1234';
     const employee: Employee = {
       id: uid('emp'),
       companyId: seededCompany.id,
       branchId: newEmployee.branchId,
       fullName: newEmployee.fullName.trim(),
-      documentId: newEmployee.documentId.trim() || undefined,
+      documentId: cleanDoc || undefined,
       baseMonthlySalary: Number(newEmployee.baseMonthlySalary),
       active: true,
       role: (newEmployee.role as EmployeeRole) || undefined,
-      habitualShiftKind: newEmployee.habitualShiftKind || undefined
+      habitualShiftKind: newEmployee.habitualShiftKind || undefined,
+      pin: cleanPin || fallbackPin
     };
 
     setEmployees((prev) => [...prev, employee]);
-    setNewEmployee((prev) => ({ ...prev, fullName: '', documentId: '', role: '', habitualShiftKind: '' }));
+    setNewEmployee((prev) => ({
+      ...prev,
+      fullName: '',
+      documentId: '',
+      role: '',
+      habitualShiftKind: '',
+      pin: ''
+    }));
   };
 
   const applyWeeklyLoad = (employee: Employee, reviewedPlan: WeeklyLoadPlan) => {
@@ -1021,13 +1051,160 @@ function AppContent({ initial, persist, backupCallbacks }: {
     onApplyWeeklyLoad: applyWeeklyLoad
   };
 
+  if (viewMode === 'login') {
+    return (
+      <main className="app-shell">
+        <EmployeeLogin
+          employees={employees}
+          settings={settings}
+          onLoginSuccess={(emp) => {
+            setCurrentEmployeeId(emp.id);
+            setStoredEmployeeSession({
+              employeeId: emp.id,
+              authenticatedAt: new Date().toISOString()
+            });
+            setViewMode('employee');
+          }}
+          onAdminLoginSuccess={() => setViewMode('admin')}
+          onCancel={() => setViewMode('admin')}
+          allowCancel={true}
+        />
+      </main>
+    );
+  }
+
+  const loggedInEmployee = employees.find((e) => e.id === currentEmployeeId);
+  if (viewMode === 'employee') {
+    if (!loggedInEmployee) {
+      return (
+        <main className="app-shell">
+          <EmployeeLogin
+            employees={employees}
+            settings={settings}
+            onLoginSuccess={(emp) => {
+              setCurrentEmployeeId(emp.id);
+              setStoredEmployeeSession({
+                employeeId: emp.id,
+                authenticatedAt: new Date().toISOString()
+              });
+              setViewMode('employee');
+            }}
+            onAdminLoginSuccess={() => setViewMode('admin')}
+            onCancel={() => setViewMode('admin')}
+            allowCancel={true}
+          />
+        </main>
+      );
+    }
+    return (
+      <main className="app-shell">
+        <EmployeePortal
+          employee={loggedInEmployee}
+          shifts={shifts}
+          branches={branches}
+          periods={periods}
+          settings={settings}
+          onLogout={() => {
+            setStoredEmployeeSession(null);
+            setCurrentEmployeeId(null);
+            setViewMode('login');
+          }}
+          onSwitchToAdmin={() => setAdminPinModalOpen(true)}
+          onUpdateEmployeePin={(empId, newPin) => {
+            setEmployees((prev) =>
+              prev.map((e) => (e.id === empId ? { ...e, pin: newPin } : e))
+            );
+          }}
+        />
+        {adminPinModalOpen && (
+          <div className="modal-backdrop">
+            <div className="modal-card panel">
+              <h3>Acceso a Modo Administrador</h3>
+              <p className="muted">Ingresa el PIN maestro para entrar al panel de gestión.</p>
+              {adminPinError && (
+                <div className="login-error-alert" role="alert">
+                  <span>{adminPinError}</span>
+                </div>
+              )}
+              <label>
+                <span>PIN de Administrador</span>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={8}
+                  value={adminPinInput}
+                  onChange={(e) => {
+                    setAdminPinInput(e.target.value);
+                    setAdminPinError(null);
+                  }}
+                  autoFocus
+                />
+              </label>
+              <div className="row" style={{ marginTop: '12px' }}>
+                <button
+                  className="primary"
+                  onClick={() => {
+                    if (verifyAdminPin(settings, adminPinInput)) {
+                      setAdminPinModalOpen(false);
+                      setAdminPinInput('');
+                      setAdminPinError(null);
+                      setViewMode('admin');
+                    } else {
+                      setAdminPinError('PIN de Administrador incorrecto.');
+                    }
+                  }}
+                >
+                  Ingresar
+                </button>
+                <button
+                  className="subtle"
+                  onClick={() => {
+                    setAdminPinModalOpen(false);
+                    setAdminPinInput('');
+                    setAdminPinError(null);
+                  }}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+    );
+  }
+
   return (
     <div className="app-shell">
-      <section className="panel grid">
-        <h1>Sandwich Qbano - Nómina Quincenal (MVP Frontend)</h1>
-        <small className="muted">
-          Empresa: {seededCompany.name} | Timezone: America/Bogota | Modelo local sin backend
-        </small>
+      <section className="panel grid admin-header-panel">
+        <div className="admin-header-row">
+          <div>
+            <div className="brand-logo-pill">
+              <Building2 size={20} color="#D97706" />
+              <span className="brand-name">Sándwich Qbano</span>
+            </div>
+            <h1 className="admin-app-title">Sandwich Qbano - Nómina Quincenal (MVP Frontend)</h1>
+            <small className="muted">
+              Empresa: {seededCompany.name} | Timezone: America/Bogota | Modelo local sin backend
+            </small>
+          </div>
+          <div className="admin-header-actions">
+            <button
+              type="button"
+              className="primary btn-portal-switch"
+              onClick={() => {
+                if (currentEmployeeId && employees.some((e) => e.id === currentEmployeeId)) {
+                  setViewMode('employee');
+                } else {
+                  setViewMode('login');
+                }
+              }}
+            >
+              <UserCheck size={18} />
+              <span>Portal Empleados</span>
+            </button>
+          </div>
+        </div>
         <div className="nav">
           {TABS.map((tab) => (
             <button
@@ -1168,6 +1345,19 @@ function AppContent({ initial, persist, backupCallbacks }: {
               </select>
               <small className="muted">Es una sugerencia; no asigna turnos automáticamente.</small>
             </label>
+            <label>
+              PIN de acceso (opcional, 4 a 6 dígitos)
+              <input
+                type="text"
+                maxLength={6}
+                placeholder="Ej. 1234"
+                value={newEmployee.pin}
+                onChange={(event) =>
+                  setNewEmployee((prev) => ({ ...prev, pin: event.target.value }))
+                }
+              />
+              <small className="muted">Por defecto toma los últimos 4 dígitos del documento.</small>
+            </label>
           </div>
           <div className="row">
             <button className="primary" onClick={addEmployee}>
@@ -1185,6 +1375,7 @@ function AppContent({ initial, persist, backupCallbacks }: {
                   <th>Rol</th>
                   <th>Turno habitual</th>
                   <th>Básico</th>
+                  <th>PIN Acceso</th>
                   <th>Estado</th>
                 </tr>
               </thead>
@@ -1235,6 +1426,21 @@ function AppContent({ initial, persist, backupCallbacks }: {
                       </select>
                     </td>
                     <td>{pesos(employee.baseMonthlySalary)}</td>
+                    <td>
+                      <input
+                        style={{ width: '80px', padding: '4px 6px', fontSize: '0.82rem' }}
+                        type="text"
+                        maxLength={6}
+                        value={employee.pin ?? (employee.documentId && employee.documentId.length >= 4 ? employee.documentId.slice(-4) : '1234')}
+                        onChange={(event) => {
+                          const val = event.target.value;
+                          setEmployees((prev) =>
+                            prev.map((item) => (item.id === employee.id ? { ...item, pin: val } : item))
+                          );
+                        }}
+                        aria-label={`PIN de ${employee.fullName}`}
+                      />
+                    </td>
                     <td>
                       <button
                         className={employee.active ? 'subtle' : 'danger'}
@@ -1976,6 +2182,18 @@ function AppContent({ initial, persist, backupCallbacks }: {
                   }))
                 }
               />
+            </label>
+            <label>
+              PIN maestro de Administrador
+              <input
+                type="password"
+                maxLength={8}
+                value={settings.adminPin ?? '1234'}
+                onChange={(event) =>
+                  setSettings((prev) => ({ ...prev, adminPin: event.target.value }))
+                }
+              />
+              <small className="muted">PIN de seguridad para ingresar al panel de gestión.</small>
             </label>
           </div>
 

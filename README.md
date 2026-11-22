@@ -277,6 +277,7 @@ La verificación manual end-to-end de la UI (Dashboard → Horarios → Cálculo
 | Vista agrupada por sede + modo pincel + override de sede | ✅ Completa | Fase 4 cerrada en `d158bb0`; la validación automatizada de F5 queda completa. |
 | Vista semanal mobile-first con resolución por fecha y horas asignadas F3 | ✅ Completa | F4: siete días civiles, períodos por fecha, estados de cobertura y vista quincenal/pincel secundaria. |
 | Tests de regresión de plantillas y motor (18 casos históricos) | ✅ Completos | Cubren los resultados programados para el seed; no certifican horarios, tarifas, reglas legales ni liquidaciones. |
+| Portal de Autoservicio del Empleado (Auth con PIN, turno de hoy, horario semanal y horas calculadas sin importes) | ✅ Implementado | `src/components/employee/` + `src/lib/employeeAuth.ts`. |
 | Conteo mensual de domingos y compensatorio | ⏳ Pendiente | Referencia histórica no verificada; requiere definición y aprobación antes de implementarse. |
 
 ---
